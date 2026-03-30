@@ -6,6 +6,13 @@
 
 Models are stored in: `~/.nnunetsegmentator/models`
 
+Canonical layout:
+
+- `task_id`: `Dataset<数字>_<model_name>`
+- install key: same as `task_id`
+- path: `~/.nnunetsegmentator/models/{task_name}/{task_id}`
+- payload directly under `{task_id}` (no wrapper dir)
+
 ### Custom Model Directory
 
 ```python
@@ -45,16 +52,10 @@ You can install local model files (zipped or unzipped) into the standard model s
 ### CLI
 
 ```bash
-# Key by model name
 nnunetsegmentator install-models \
   --task total \
-  --model total_organs=/local/total_organs.zip \
-  --model total_vertebrae=/local/total_vertebrae/
-
-# Key by task ID
-nnunetsegmentator install-models \
-  --task total \
-  --model Dataset291=/local/total_organs.zip
+  --model Dataset291_total_organs=/local/total_organs.zip \
+  --model Dataset292_total_vertebrae=/local/total_vertebrae/
 ```
 
 ### Python API
@@ -65,8 +66,8 @@ from nnunetsegmentator import TaskRegistry
 installed = TaskRegistry.install_task_models_from_local(
     task_name="total",
     model_sources={
-        "total_organs": "/local/total_organs.zip",
-        "Dataset291": "/local/total_vertebrae/",
+        "Dataset291_total_organs": "/local/total_organs.zip",
+        "Dataset292_total_vertebrae": "/local/total_vertebrae/",
     },
     force=False,
 )
@@ -79,8 +80,36 @@ print(installed)
 python scripts/model_manager.py \
   --install-local \
   --task total \
-  --model total_organs=/local/total_organs.zip
+  --model Dataset291_total_organs=/local/total_organs.zip
 ```
+
+## Migrating from nnUNet Workspace Results
+
+If you already have trained/exported nnUNet models under
+`~/.nnunetsegmentator/nnunet_workspace/results`, migrate them into canonical
+storage with:
+
+```bash
+# Preview (no writes)
+python scripts/migrate_workspace_models.py --dry-run
+
+# Execute migration
+python scripts/migrate_workspace_models.py
+```
+
+Or use model manager:
+
+```bash
+python scripts/model_manager.py --migrate-workspace --dry-run
+python scripts/model_manager.py --migrate-workspace --force
+```
+
+Notes:
+- Source default: `~/.nnunetsegmentator/nnunet_workspace/results`
+- Target default: `~/.nnunetsegmentator/models/{task_name}/{task_id}`
+- Migration auto-detects nnUNet payload roots and normalizes wrappers so payload
+  is directly under `{task_id}`.
+- `--force` overwrites existing canonical targets.
 
 ## Model Registration
 

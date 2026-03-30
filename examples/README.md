@@ -9,6 +9,7 @@ This directory contains example scripts demonstrating how to use nnunetsegmentat
 3. [Custom Pipeline](#03_custom_pipelinepy)
 4. [DICOM Input/Output Segmentation](#04_dicom_segmentationpy)
 5. [Install `total_mr` from TotalSegmentator](#05_install_total_mr_from_totalsegmentatorpy)
+6. [Run real Case_1 PET/CT DICOM segmentation](#06_run_case01_segmentationpy)
 
 ---
 
@@ -195,6 +196,44 @@ python examples/05_install_total_mr_from_totalsegmentator.py --dry-run
 - Local model installation by task ID
 - Interoperability with existing TotalSegmentator model caches
 - Standardized nnunetsegmentator model root layout
+
+---
+
+## 06_run_case01_segmentation.py
+
+**Description**: Runs segmentation on a real PET/CT DICOM case (`data/Case_1`) and writes outputs as DICOM series.
+
+**What it does**:
+- Auto-detects PET (`PT`) and CT (`CT`) DICOM series under `data/Case_1`
+- Runs PET segmentation with `lion` (PSMA model by default)
+- Runs CT segmentation with `total` (pipeline mode `fast` by default)
+- Exports both PET and CT segmentations as DICOM slice series
+- Optionally exports each label mask as its own DICOM slice series for both runs
+
+**Run**:
+```bash
+python examples/06_run_case01_segmentation.py
+```
+
+**Common options**:
+```bash
+# Force CPU
+python examples/06_run_case01_segmentation.py --cpu
+
+# Use explicit model paths
+python examples/06_run_case01_segmentation.py \
+  --pet-model-path /path/to/Dataset711 \
+  --ct-model-path /path/to/Dataset852
+
+# Disable per-label DICOM series
+python examples/06_run_case01_segmentation.py --no-labels
+```
+
+**Output**:
+- `example_output_case01/pet_segmentation/segmentation_series/` - PET main segmentation series
+- `example_output_case01/pet_segmentation/label_series/<label_name>/` - PET per-label series
+- `example_output_case01/ct_segmentation/segmentation_series/` - CT main segmentation series
+- `example_output_case01/ct_segmentation/label_series/<label_name>/` - CT per-label series
 
 ---
 

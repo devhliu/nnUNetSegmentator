@@ -109,7 +109,7 @@ def model_loader_context(model_path: str, device: str = "cuda:0") -> Iterator:
     """
     model = None
     try:
-        from nnunetv2.inference.predict import nnUNetPredictor
+        from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
         import torch
 
         model = nnUNetPredictor(device=torch.device(device))

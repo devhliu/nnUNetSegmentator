@@ -218,7 +218,7 @@ class DukeSegTask(BaseTask):
             # 3-part model strategy for DukeSeg v1
             "dukeseg_skeleton": ModelInfo(
                 name="dukeseg_skeleton",
-                task_id="1004",
+                task_id="Dataset1004_dukeseg_skeleton",
                 url=f"{base_url}/dukeseg_skeleton.zip",
                 checksum="",
                 labels=DUKESEG_SKELETON,
@@ -229,7 +229,7 @@ class DukeSegTask(BaseTask):
             ),
             "dukeseg_model2": ModelInfo(
                 name="dukeseg_model2",
-                task_id="1001",
+                task_id="Dataset1001_dukeseg_model2",
                 url=f"{base_url}/dukeseg_model2.zip",
                 checksum="",
                 labels=DUKESEG_MODEL2,
@@ -240,7 +240,7 @@ class DukeSegTask(BaseTask):
             ),
             "dukeseg_model3": ModelInfo(
                 name="dukeseg_model3",
-                task_id="1002",
+                task_id="Dataset1002_dukeseg_model3",
                 url=f"{base_url}/dukeseg_model3.zip",
                 checksum="",
                 labels=DUKESEG_MODEL3,
@@ -356,7 +356,7 @@ class BodyCompositionTask(BaseTask):
         models = {
             "body_composition": ModelInfo(
                 name="body_composition",
-                task_id="1005",
+                task_id="Dataset1005_body_composition",
                 url=f"{base_url}/body_composition.zip",
                 checksum="",
                 labels=DUKESEG_BODY_COMPOSITION,

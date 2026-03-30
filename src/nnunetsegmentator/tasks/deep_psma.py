@@ -65,7 +65,7 @@ class DEEPPSMATask(BaseTask):
             models={
                 'deep_psma': ModelInfo(
                     name='deep_psma',
-                    task_id='Dataset881_PSMA_PET',
+                    task_id='Dataset881_deep_psma',
                     url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA.git',
                     checksum=None,  # Git LFS handles integrity
                     labels={

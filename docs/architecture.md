@@ -204,7 +204,7 @@ TaskDefinition(
     models={
         'gtrc': ModelInfo(
             name='gtrc',
-            task_id='Task501_GTRC',
+            task_id='Dataset501_gtrc_psma',
             url='https://...',
             checksum='abc123',
             labels={'tumor_core': 1, 'tumor_edema': 2},

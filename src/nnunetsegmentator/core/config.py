@@ -32,6 +32,20 @@ def get_default_model_root() -> Path:
     return Path.home() / ".nnunetsegmentator" / "models"
 
 
+def get_default_nnunet_workspace() -> Path:
+    """
+    Get the default nnUNet workspace directory.
+
+    The workspace path is determined by:
+    1. NNUNETSEGMENTATOR_NNUNET_WORKSPACE environment variable (if set)
+    2. Default: ~/.nnunetsegmentator/nnunet_workspace/
+    """
+    env_path = os.environ.get("NNUNETSEGMENTATOR_NNUNET_WORKSPACE")
+    if env_path:
+        return Path(env_path)
+    return Path.home() / ".nnunetsegmentator" / "nnunet_workspace"
+
+
 @dataclass
 class Config:
     """
@@ -41,12 +55,12 @@ class Config:
     model parameters, and processing options.
     
     Model Storage Path Structure:
-        {NNUNETSEGMENTATOR_MODEL_ROOTPATH}/{task_name}/{nnunet_model_name_with_taskid}
+        {NNUNETSEGMENTATOR_MODEL_ROOTPATH}/{task_name}/{task_id}
         
     Where:
         - NNUNETSEGMENTATOR_MODEL_ROOTPATH: Environment variable (default: ~/.nnunetsegmentator/models/)
         - task_name: Name of the segmentation task (e.g., 'gtrc', 'lion', 'total')
-        - nnunet_model_name_with_taskid: Model directory with task ID (e.g., 'Dataset881_PSMA_PET')
+        - task_id: nnUNet task directory (e.g., 'Dataset881')
     """
     
     # Paths
@@ -212,14 +226,28 @@ class Config:
         based on the configuration.
         """
         import os
-        
-        nnunet_raw = self.nnunet_raw or Path(os.environ.get('nnUNet_raw', self.model_dir / "raw"))
+
+        workspace_root = get_default_nnunet_workspace()
+        nnunet_raw = self.nnunet_raw or Path(os.environ.get('nnUNet_raw', workspace_root / "raw"))
         nnunet_preprocessed = self.nnunet_preprocessed or Path(
-            os.environ.get('nnUNet_preprocessed', self.model_dir / "preprocessed")
+            os.environ.get('nnUNet_preprocessed', workspace_root / "preprocessed")
         )
         nnunet_results = self.nnunet_results or Path(
-            os.environ.get('nnUNet_results', self.model_dir / "results")
+            os.environ.get('nnUNet_results', workspace_root / "results")
         )
+
+        model_root = self.model_dir.expanduser().resolve()
+        for name, path in (
+            ("nnUNet_raw", nnunet_raw),
+            ("nnUNet_preprocessed", nnunet_preprocessed),
+            ("nnUNet_results", nnunet_results),
+        ):
+            resolved = path.expanduser().resolve()
+            if resolved == model_root or model_root in resolved.parents:
+                raise ValueError(
+                    f"{name} must not be inside model_dir ({model_root}). "
+                    "Use a separate nnUNet workspace path."
+                )
 
         nnunet_raw.mkdir(parents=True, exist_ok=True)
         nnunet_preprocessed.mkdir(parents=True, exist_ok=True)
@@ -269,31 +297,31 @@ class Config:
                 path.mkdir(parents=True, exist_ok=True)
                 logger.debug(f"Ensured directory: {path}")
     
-    def get_model_path(self, task_name: str, model_name: str = None) -> Path:
+    def get_model_path(self, task_name: str, task_id: str = None) -> Path:
         """
         Get the model path following the standard structure.
         
         Model path structure:
-            {model_dir}/{task_name}/{model_name_or_task_id}
+            {model_dir}/{task_name}/{task_id}
         
         Args:
             task_name: Name of the segmentation task (e.g., 'gtrc', 'lion', 'total')
-            model_name: Optional model name with task ID (e.g., 'Dataset881_PSMA_PET')
-                       If None, returns the task directory
+            task_id: Optional task ID directory name (e.g., 'Dataset881')
+                    If None, returns the task directory
         
         Returns:
             Path to model directory
         
         Examples:
             >>> config = Config()
-            >>> config.get_model_path('gtrc', 'Dataset881_PSMA_PET')
-            Path('/home/user/.nnunetsegmentator/models/gtrc/Dataset881_PSMA_PET')
+            >>> config.get_model_path('gtrc', 'Dataset881_gtrc_psma')
+            Path('/home/user/.nnunetsegmentator/models/gtrc/Dataset881_gtrc_psma')
             
             >>> config.get_model_path('lion')
             Path('/home/user/.nnunetsegmentator/models/lion')
         """
-        if model_name:
-            return self.model_dir / task_name / model_name
+        if task_id:
+            return self.model_dir / task_name / task_id
         return self.model_dir / task_name
     
     def __repr__(self) -> str:

@@ -103,11 +103,11 @@ nnunetsegmentator info [OPTIONS]
 Install task model files from local archives or directories.
 
 ```bash
-nnunetsegmentator install-models --task TASK --model ID_OR_NAME=PATH [--model ID_OR_NAME=PATH ...] [--force]
+nnunetsegmentator install-models --task TASK --model DATASETID_MODELNAME=PATH [--model DATASETID_MODELNAME=PATH ...] [--force]
 ```
 
 **Notes:**
-- `ID_OR_NAME` can be either the task model name or the nnUNet task ID directory name.
+- `DATASETID_MODELNAME` must be canonical task_id `Dataset<数字>_<model_name>`.
 - `PATH` can point to a directory (unzipped model) or archive (`.zip`, `.tar`, `.tar.gz`, `.tgz`).
 - Installed output path follows the standard structure:
   `{NNUNETSEGMENTATOR_MODEL_ROOTPATH}/{task_name}/{task_id}`.
@@ -132,21 +132,13 @@ nnunetsegmentator batch -i data/patients/ -o results/ -t total --num-workers 8
 nnunetsegmentator segment -i input.nii.gz -o output.nii.gz -t gtrc -m /path/to/model
 ```
 
-### Install Local Models (by model name)
+### Install Local Models (canonical key)
 
 ```bash
 nnunetsegmentator install-models \
   --task total \
-  --model total_organs=/local/total_organs.zip \
-  --model total_vertebrae=/local/total_vertebrae/
-```
-
-### Install Local Models (by task ID)
-
-```bash
-nnunetsegmentator install-models \
-  --task total \
-  --model Dataset291=/local/total_organs.zip
+  --model Dataset291_total_organs=/local/total_organs.zip \
+  --model Dataset292_total_vertebrae=/local/total_vertebrae/
 ```
 
 ### With Configuration File
@@ -158,6 +150,6 @@ nnunetsegmentator segment -i input.nii.gz -o output.nii.gz -t gtrc -c config.yam
 ## Environment Variables
 
 ```bash
-export nnUNet_results="/path/to/models"
+export nnUNet_results="/path/to/nnunet_workspace/results"
 nnunetsegmentator segment -i input.nii.gz -o output.nii.gz -t gtrc
 ```

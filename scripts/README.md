@@ -87,6 +87,12 @@ python model_manager.py --download --task gtrc
 # Download with variant
 python model_manager.py --download --task lion --variant psma
 
+# Preview migration from workspace results into canonical model root
+python model_manager.py --migrate-workspace --dry-run
+
+# Execute migration and overwrite existing canonical targets
+python model_manager.py --migrate-workspace --force
+
 # Clean cache (dry run)
 python model_manager.py --clean-cache
 
@@ -99,6 +105,35 @@ python model_manager.py --clean-cache --force
 - Download management
 - Cache cleaning
 - Variant support
+- Workspace-results migration to canonical model layout
+
+---
+
+### 4. migrate_workspace_models.py
+
+Migrate model payloads from nnUNet workspace results into canonical model layout.
+
+**Usage**:
+```bash
+# Dry run
+python migrate_workspace_models.py --dry-run
+
+# Migrate using defaults:
+#   source: ~/.nnunetsegmentator/nnunet_workspace/results
+#   target: ~/.nnunetsegmentator/models
+python migrate_workspace_models.py
+
+# Override source/target and force overwrite
+python migrate_workspace_models.py \
+  --workspace-results /path/to/nnunet_workspace/results \
+  --model-root /path/to/models \
+  --force
+```
+
+**Notes**:
+- Canonical target is `{model_root}/{task_name}/{task_id}`.
+- `task_id` uses `Dataset<数字>_<model_name>`.
+- Payload is normalized to be directly under `{task_id}`.
 
 ---
 

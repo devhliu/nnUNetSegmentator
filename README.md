@@ -117,19 +117,23 @@ python download_models.py --task all --output-dir ~/.nnunetsegmentator/models
 ### Install Local Model Files (archive or directory)
 
 You can install task model files from local paths (unzipped directory or archive).
-Identifiers can be either model names or task IDs.
+Identifiers must use canonical format: Dataset<数字>_<model_name>.
 
 ```bash
-# Using model names
 nnunetsegmentator install-models \
   --task total \
-  --model total_organs=/local/total_organs.zip \
-  --model total_vertebrae=/local/total_vertebrae/
+  --model Dataset291_total_organs=/local/total_organs.zip \
+  --model Dataset292_total_vertebrae=/local/total_vertebrae/
+```
 
-# Using task IDs
-nnunetsegmentator install-models \
-  --task total \
-  --model Dataset291=/local/total_organs.zip
+### Migrate Existing nnUNet Workspace Results
+
+If you have models under `~/.nnunetsegmentator/nnunet_workspace/results`,
+convert them into canonical model storage:
+
+```bash
+python scripts/migrate_workspace_models.py --dry-run
+python scripts/migrate_workspace_models.py
 ```
 
 **Model Sources:**
@@ -357,7 +361,7 @@ class MyCustomTask(BaseTask):
             models={
                 'my_model': ModelInfo(
                     name='my_model',
-                    task_id='Task999_MyTask',
+                    task_id='Dataset999_my_model',
                     url='https://url.to.model/model.zip',
                     checksum='abc123',
                     labels={'target': 1, 'background': 0},
@@ -427,9 +431,9 @@ use_gpu: true
 gpu_id: 0
 batch_size: 1
 
-nnunet_raw: /path/to/nnUNet_raw
-nnunet_preprocessed: /path/to/nnUNet_preprocessed
-nnunet_results: /path/to/nnUNet_results
+nnunet_raw: /path/to/nnunet_workspace/raw
+nnunet_preprocessed: /path/to/nnunet_workspace/preprocessed
+nnunet_results: /path/to/nnunet_workspace/results
 
 log_level: INFO
 log_file: ./logs/segmentation.log
@@ -459,9 +463,9 @@ The framework requires proper nnUNet environment setup:
 
 ```bash
 # Set environment variables
-export nnUNet_raw=/path/to/nnUNet_raw
-export nnUNet_preprocessed=/path/to/nnUNet_preprocessed
-export nnUNet_results=/path/to/nnUNet_results
+export nnUNet_raw=/path/to/nnunet_workspace/raw
+export nnUNet_preprocessed=/path/to/nnunet_workspace/preprocessed
+export nnUNet_results=/path/to/nnunet_workspace/results
 ```
 
 Or configure in Python:
@@ -470,9 +474,9 @@ Or configure in Python:
 from nnunetsegmentator import Config
 
 config = Config(
-    nnunet_raw='/path/to/nnUNet_raw',
-    nnunet_preprocessed='/path/to/nnUNet_preprocessed',
-    nnunet_results='/path/to/nnUNet_results'
+    nnunet_raw='/path/to/nnunet_workspace/raw',
+    nnunet_preprocessed='/path/to/nnunet_workspace/preprocessed',
+    nnunet_results='/path/to/nnunet_workspace/results'
 )
 config.setup_nnunet_environment()
 ```

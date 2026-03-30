@@ -92,9 +92,9 @@ config = config.update(
 
 ```python
 config = Config(
-    nnunet_raw="/path/to/nnUNet_raw",
-    nnunet_preprocessed="/path/to/nnUNet_preprocessed",
-    nnunet_results="/path/to/nnUNet_results"
+    nnunet_raw="/path/to/nnunet_workspace/raw",
+    nnunet_preprocessed="/path/to/nnunet_workspace/preprocessed",
+    nnunet_results="/path/to/nnunet_workspace/results"
 )
 config.setup_nnunet_environment()
 ```

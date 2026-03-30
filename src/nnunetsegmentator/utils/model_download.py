@@ -200,22 +200,45 @@ class ModelDownloader:
         """
         archive_path = Path(archive_path)
         
+        temp_extract_dir = None
         if extract_dir is None:
-            extract_dir = archive_path.parent / archive_path.stem
+            temp_extract_dir = archive_path.parent / archive_path.stem
+            extract_dir = temp_extract_dir
+        else:
+            temp_extract_dir = archive_path.parent / f"temp_{archive_path.stem}"
         
+        temp_extract_dir = Path(temp_extract_dir)
         extract_dir = Path(extract_dir)
         
-        logger.info(f"Extracting {archive_path} to {extract_dir}")
-        extract_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Extracting {archive_path} to {temp_extract_dir}")
+        temp_extract_dir.mkdir(parents=True, exist_ok=True)
         
         if archive_path.suffix == '.zip':
             with zipfile.ZipFile(archive_path, 'r') as zf:
-                self._safe_extract_zip(zf, extract_dir)
+                self._safe_extract_zip(zf, temp_extract_dir)
         elif archive_path.suffix in ['.tar', '.gz', '.tgz']:
             with tarfile.open(archive_path, 'r:*') as tf:
-                self._safe_extract_tar(tf, extract_dir)
+                self._safe_extract_tar(tf, temp_extract_dir)
         else:
             raise ValueError(f"Unsupported archive format: {archive_path.suffix}")
+        
+        # Check if the archive has a single top-level directory
+        contents = list(temp_extract_dir.iterdir())
+        if len(contents) == 1 and contents[0].is_dir():
+            # If single directory, move its contents to extract_dir
+            single_dir = contents[0]
+            if extract_dir.exists():
+                shutil.rmtree(extract_dir)
+            shutil.move(str(single_dir), str(extract_dir))
+            # Clean up temp directory
+            if temp_extract_dir.exists() and temp_extract_dir != extract_dir:
+                shutil.rmtree(temp_extract_dir)
+        else:
+            # Otherwise, just move the temp dir to extract_dir
+            if extract_dir.exists():
+                shutil.rmtree(extract_dir)
+            if temp_extract_dir != extract_dir:
+                shutil.move(str(temp_extract_dir), str(extract_dir))
         
         logger.info(f"Extraction complete: {extract_dir}")
         return extract_dir
@@ -240,22 +263,29 @@ class ModelDownloader:
                 raise RuntimeError(f"Unsafe archive member path detected: {member.name}")
         archive.extractall(destination)
     
-    def download_model(self, model_name: str, url: str, 
-                      checksum: Optional[str] = None,
-                      force: bool = False) -> Path:
+    def download_model(
+        self,
+        model_name: str,
+        url: str,
+        checksum: Optional[str] = None,
+        force: bool = False,
+        target_dir_name: Optional[str] = None,
+    ) -> Path:
         """
         Download and prepare a model.
         
         Args:
-            model_name: Name of model
+            model_name: Name of model (used for index key)
             url: Download URL
             checksum: Expected checksum
             force: Force re-download
+            target_dir_name: Optional target directory name for extracted model
         
         Returns:
             Path to model directory
         """
-        model_path = self.model_dir / model_name
+        target_name = target_dir_name or model_name
+        model_path = self.model_dir / target_name
         
         # Check if already downloaded
         if not force and model_name in self.index:
@@ -371,10 +401,23 @@ def setup_nnunet_environment(model_path: Path, task_id: str):
         model_path: Path to model directory
         task_id: nnUNet task ID
     """
-    # Set nnUNet environment variables
-    os.environ['nnUNet_results'] = str(model_path.parent)
-    os.environ['nnUNet_preprocessed'] = str(model_path.parent / "preprocessed")
-    os.environ['nnUNet_raw'] = str(model_path.parent / "raw")
+    # Keep nnUNet workspace separate from model storage by default.
+    workspace_root = Path(
+        os.environ.get(
+            "NNUNETSEGMENTATOR_NNUNET_WORKSPACE",
+            str(Path.home() / ".nnunetsegmentator" / "nnunet_workspace"),
+        )
+    )
+    raw_dir = workspace_root / "raw"
+    preprocessed_dir = workspace_root / "preprocessed"
+    results_dir = workspace_root / "results"
+
+    for path in (raw_dir, preprocessed_dir, results_dir):
+        path.mkdir(parents=True, exist_ok=True)
+
+    os.environ['nnUNet_results'] = str(results_dir)
+    os.environ['nnUNet_preprocessed'] = str(preprocessed_dir)
+    os.environ['nnUNet_raw'] = str(raw_dir)
     
     logger.debug(f"nnUNet environment set: results={os.environ['nnUNet_results']}")
 
@@ -394,9 +437,11 @@ def get_nnunet_model_folder(model_path: Path, task_id: str,
     Returns:
         Path to model folder
     """
-    # nnUNet v2 naming convention: DatasetXXX_TaskName__trainer__plans
-    folder_name = f"Dataset{task_id}_{task_id}__{trainer}__nnUNetPlans"
-    return model_path / configuration / folder_name
+    # Canonical task_id is Dataset<数字>_<model_name>; keep compatibility if caller passes digits.
+    canonical_task_id = task_id if str(task_id).startswith("Dataset") else f"Dataset{task_id}"
+    # Common nnUNet v2 folder naming under task payload root.
+    folder_name = f"{trainer}__nnUNetPlans__{configuration}"
+    return model_path / canonical_task_id / folder_name
 
 
 # Convenience functions

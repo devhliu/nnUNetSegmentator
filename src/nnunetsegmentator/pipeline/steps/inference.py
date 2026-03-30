@@ -98,7 +98,7 @@ class nnUNetInferenceStep(PipelineStep):
         if not model_path.exists():
             raise FileNotFoundError(f"Model path does not exist: {model_path}")
         try:
-            from nnunetv2.inference.predict import nnUNetPredictor
+            from nnunetv2.inference.predict_from_raw_data import nnUNetPredictor
             import torch
         except ImportError as exc:
             raise RuntimeError(
@@ -118,7 +118,7 @@ class nnUNetInferenceStep(PipelineStep):
             tile_step_size=tile_step_size,
             use_gaussian=use_gaussian,
             use_mirroring=use_mirroring,
-            perform_everything_on_gpu=perform_everything_on_gpu,
+            perform_everything_on_device=perform_everything_on_gpu,
             device=torch.device(target_device),
             verbose=verbose,
             allow_tqdm=self.config.get('allow_tqdm', True),

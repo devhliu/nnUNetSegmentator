@@ -53,9 +53,9 @@ output_dir: "./output"
 model_dir: "~/.nnunetsegmentator/models"
 cache_dir: "~/.nnunetsegmentator/cache"
 
-nnunet_raw: "/path/to/nnUNet_raw"
-nnunet_preprocessed: "/path/to/nnUNet_preprocessed"
-nnunet_results: "/path/to/nnUNet_results"
+nnunet_raw: "/path/to/nnunet_workspace/raw"
+nnunet_preprocessed: "/path/to/nnunet_workspace/preprocessed"
+nnunet_results: "/path/to/nnunet_workspace/results"
 
 patch_size: [128, 128, 64]
 min_size: 100
@@ -78,9 +78,9 @@ config = config.update(use_gpu=False, num_workers=2)
 ## Environment Variables
 
 ```bash
-export nnUNet_raw="/path/to/nnUNet_raw"
-export nnUNet_preprocessed="/path/to/nnUNet_preprocessed"
-export nnUNet_results="/path/to/nnUNet_results"
+export nnUNet_raw="/path/to/nnunet_workspace/raw"
+export nnUNet_preprocessed="/path/to/nnunet_workspace/preprocessed"
+export nnUNet_results="/path/to/nnunet_workspace/results"
 ```
 
 ## Best Practices

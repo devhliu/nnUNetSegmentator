@@ -255,7 +255,7 @@ class TotalSegmentatorTask(BaseTask):
             # 5-part model strategy for full resolution
             "total_organs": ModelInfo(
                 name="total_organs",
-                task_id="291",
+                task_id="Dataset291_total_organs",
                 url=f"{base_url}/total_organs.zip",
                 checksum="",
                 labels=PART_ORGANS_LABELS,
@@ -266,7 +266,7 @@ class TotalSegmentatorTask(BaseTask):
             ),
             "total_vertebrae": ModelInfo(
                 name="total_vertebrae",
-                task_id="292",
+                task_id="Dataset292_total_vertebrae",
                 url=f"{base_url}/total_vertebrae.zip",
                 checksum="",
                 labels=PART_VERTEBRAE_LABELS,
@@ -277,7 +277,7 @@ class TotalSegmentatorTask(BaseTask):
             ),
             "total_cardiac": ModelInfo(
                 name="total_cardiac",
-                task_id="293",
+                task_id="Dataset293_total_cardiac",
                 url=f"{base_url}/total_cardiac.zip",
                 checksum="",
                 labels=PART_CARDIAC_LABELS,
@@ -288,7 +288,7 @@ class TotalSegmentatorTask(BaseTask):
             ),
             "total_muscles": ModelInfo(
                 name="total_muscles",
-                task_id="294",
+                task_id="Dataset294_total_muscles",
                 url=f"{base_url}/total_muscles.zip",
                 checksum="",
                 labels=PART_MUSCLES_LABELS,
@@ -299,7 +299,7 @@ class TotalSegmentatorTask(BaseTask):
             ),
             "total_ribs": ModelInfo(
                 name="total_ribs",
-                task_id="295",
+                task_id="Dataset295_total_ribs",
                 url=f"{base_url}/total_ribs.zip",
                 checksum="",
                 labels=PART_RIBS_LABELS,
@@ -311,7 +311,7 @@ class TotalSegmentatorTask(BaseTask):
             # Fast model (single model, lower resolution)
             "total_fast": ModelInfo(
                 name="total_fast",
-                task_id="297",
+                task_id="Dataset297_total_fast",
                 url=f"{base_url}/total_fast.zip",
                 checksum="",
                 labels=TOTAL_LABELS,
@@ -323,7 +323,7 @@ class TotalSegmentatorTask(BaseTask):
             # Fastest model (even lower resolution)
             "total_fastest": ModelInfo(
                 name="total_fastest",
-                task_id="298",
+                task_id="Dataset298_total_fastest",
                 url=f"{base_url}/total_fastest.zip",
                 checksum="",
                 labels=TOTAL_LABELS,
@@ -533,7 +533,7 @@ class TotalSegmentatorMRTask(BaseTask):
         models = {
             "total_mr_organs": ModelInfo(
                 name="total_mr_organs",
-                task_id="850",
+                task_id="Dataset850_total_mr_organs",
                 url=f"{base_url}/total_mr_organs.zip",
                 checksum="",
                 labels=cls.MR_LABELS,
@@ -544,7 +544,7 @@ class TotalSegmentatorMRTask(BaseTask):
             ),
             "total_mr_fast": ModelInfo(
                 name="total_mr_fast",
-                task_id="852",
+                task_id="Dataset852_total_mr_fast",
                 url=f"{base_url}/total_mr_fast.zip",
                 checksum="",
                 labels=cls.MR_LABELS,

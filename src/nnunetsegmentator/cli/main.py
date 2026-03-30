@@ -88,8 +88,8 @@ Examples:
         '--model',
         action='append',
         required=True,
-        metavar='ID_OR_NAME=PATH',
-        help='Model mapping (repeatable). Key can be model name or task ID.',
+        metavar='DATASETID_MODELNAME=PATH',
+        help="Model mapping (repeatable). Key must be canonical format: Dataset<数字>_<model_name>.",
     )
     install_models_parser.add_argument(
         '--force',
@@ -266,14 +266,14 @@ def _parse_model_mappings(entries):
     for entry in entries:
         if "=" not in entry:
             raise ValueError(
-                f"Invalid --model value '{entry}'. Expected format: ID_OR_NAME=PATH"
+                f"Invalid --model value '{entry}'. Expected format: DATASETID_MODELNAME=PATH"
             )
         key, raw_path = entry.split("=", 1)
         key = key.strip()
         raw_path = raw_path.strip()
         if not key or not raw_path:
             raise ValueError(
-                f"Invalid --model value '{entry}'. Expected format: ID_OR_NAME=PATH"
+                f"Invalid --model value '{entry}'. Expected format: DATASETID_MODELNAME=PATH"
             )
         mappings[key] = raw_path
     return mappings

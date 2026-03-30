@@ -49,7 +49,7 @@ class LungVesselsTask(BaseTask):
         models = {
             "lung_vessels": ModelInfo(
                 name="lung_vessels",
-                task_id="117",
+                task_id="Dataset117_lung_vessels",
                 url=f"{base_url}/lung_vessels.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -131,7 +131,7 @@ class BodySegmentationTask(BaseTask):
         models = {
             "body": ModelInfo(
                 name="body",
-                task_id="299",
+                task_id="Dataset299_body",
                 url=f"{base_url}/body.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -140,7 +140,7 @@ class BodySegmentationTask(BaseTask):
             ),
             "body_fast": ModelInfo(
                 name="body_fast",
-                task_id="300",
+                task_id="Dataset300_body_fast",
                 url=f"{base_url}/body_fast.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -233,7 +233,7 @@ class TissueTypesTask(BaseTask):
         models = {
             "tissue_types": ModelInfo(
                 name="tissue_types",
-                task_id="481",
+                task_id="Dataset481_tissue_types",
                 url=f"{base_url}/tissue_types.zip",
                 checksum="",
                 labels=cls.LABELS_3,
@@ -242,7 +242,7 @@ class TissueTypesTask(BaseTask):
             ),
             "tissue_4_types": ModelInfo(
                 name="tissue_4_types",
-                task_id="485",
+                task_id="Dataset485_tissue_4_types",
                 url=f"{base_url}/tissue_4_types.zip",
                 checksum="",
                 labels=cls.LABELS_4,
@@ -329,7 +329,7 @@ class HeartChambersTask(BaseTask):
         models = {
             "heartchambers_highres": ModelInfo(
                 name="heartchambers_highres",
-                task_id="301",
+                task_id="Dataset301_heartchambers_highres",
                 url=f"{base_url}/heartchambers_highres.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -409,7 +409,7 @@ class CerebralBleedTask(BaseTask):
         models = {
             "cerebral_bleed": ModelInfo(
                 name="cerebral_bleed",
-                task_id="150",
+                task_id="Dataset150_cerebral_bleed",
                 url=f"{base_url}/cerebral_bleed.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -485,7 +485,7 @@ class LiverVesselsTask(BaseTask):
         models = {
             "liver_vessels": ModelInfo(
                 name="liver_vessels",
-                task_id="XXX",  # Would have actual task ID
+                task_id="Dataset1501_liver_vessels",
                 url=f"{base_url}/liver_vessels.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -560,7 +560,7 @@ class LungNodulesTask(BaseTask):
         models = {
             "lung_nodules": ModelInfo(
                 name="lung_nodules",
-                task_id="504",
+                task_id="Dataset504_lung_nodules",
                 url=f"{base_url}/lung_nodules.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -641,7 +641,7 @@ class VertebraeBodyTask(BaseTask):
         models = {
             "vertebrae_body": ModelInfo(
                 name="vertebrae_body",
-                task_id="257",
+                task_id="Dataset257_vertebrae_body",
                 url=f"{base_url}/vertebrae_body.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -710,7 +710,7 @@ class LiverLesionsTask(BaseTask):
         models = {
             "liver_lesions": ModelInfo(
                 name="liver_lesions",
-                task_id="XXX",
+                task_id="Dataset1502_liver_lesions",
                 url=f"{base_url}/liver_lesions.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -719,7 +719,7 @@ class LiverLesionsTask(BaseTask):
             ),
             "liver_lesions_mr": ModelInfo(
                 name="liver_lesions_mr",
-                task_id="XXX",
+                task_id="Dataset1503_liver_lesions_mr",
                 url=f"{base_url}/liver_lesions_mr.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -795,7 +795,7 @@ class KidneyCystsTask(BaseTask):
         models = {
             "kidney_cysts": ModelInfo(
                 name="kidney_cysts",
-                task_id="XXX",
+                task_id="Dataset1504_kidney_cysts",
                 url=f"{base_url}/kidney_cysts.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -872,7 +872,7 @@ class PleuralPericardEffusionTask(BaseTask):
         models = {
             "pleural_pericard_effusion": ModelInfo(
                 name="pleural_pericard_effusion",
-                task_id="XXX",
+                task_id="Dataset1505_pleural_pericard_effusion",
                 url=f"{base_url}/pleural_pericard_effusion.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -947,7 +947,7 @@ class BodyMRTask(BaseTask):
         models = {
             "body_mr": ModelInfo(
                 name="body_mr",
-                task_id="XXX",
+                task_id="Dataset1506_body_mr",
                 url=f"{base_url}/body_mr.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -1018,7 +1018,7 @@ class TissueTypesMRTask(BaseTask):
         models = {
             "tissue_types_mr": ModelInfo(
                 name="tissue_types_mr",
-                task_id="XXX",
+                task_id="Dataset1507_tissue_types_mr",
                 url=f"{base_url}/tissue_types_mr.zip",
                 checksum="",
                 labels=cls.LABELS,
@@ -1063,4 +1063,3 @@ class TissueTypesMRTask(BaseTask):
             config={"model_name": "tissue_types_mr"}
         )
         return pipeline
-

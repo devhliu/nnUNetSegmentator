@@ -28,9 +28,18 @@ from typing import Dict, Optional, List
 from dataclasses import dataclass
 from enum import Enum
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 try:
     import requests
     from tqdm import tqdm
+    from nnunetsegmentator.utils.model_layout import (
+        dataset_prefix,
+        find_model_payload_root,
+        has_model_payload,
+        is_canonical_task_id,
+        normalize_model_directory,
+    )
 except ImportError:
     print("Please install required packages: pip install requests tqdm")
     sys.exit(1)
@@ -62,13 +71,14 @@ class ModelInfo:
     github_repo: Optional[str] = None
     target_subdir: Optional[str] = None  # Subdirectory within repo to extract
     variants: Optional[Dict[str, str]] = None  # Model variants (e.g., PSMA, FDG)
+    variant_task_ids: Optional[Dict[str, str]] = None  # Variant -> Dataset<数字>_<model_name>
 
 
 # Available models with actual download sources
 AVAILABLE_MODELS: Dict[str, ModelInfo] = {
     'gtrc': ModelInfo(
         name='gtrc',
-        task_id='Dataset881_PSMA_PET',
+        task_id='Dataset881_gtrc_psma',
         url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
         checksum=None,  # Git LFS handles integrity
         filename='gtrc.zip',
@@ -77,14 +87,19 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
         github_repo='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
         target_subdir='data/nnUNet_data/results',
         variants={
-            'psma': 'Dataset881_PSMA_PET',
-            'fdg': 'Dataset882_FDG_PET',
-            'lupsma': 'Dataset883_LUPSMA_SPECT',
-        }
+            'psma': 'Dataset881_gtrc_psma',
+            'fdg': 'Dataset882_gtrc_fdg',
+            'lupsma': 'Dataset883_gtrc_lupsma',
+        },
+        variant_task_ids={
+            'psma': 'Dataset881_gtrc_psma',
+            'fdg': 'Dataset882_gtrc_fdg',
+            'lupsma': 'Dataset883_gtrc_lupsma',
+        },
     ),
     'lion': ModelInfo(
         name='lion',
-        task_id='Dataset789_Tumors',
+        task_id='Dataset789_fdg',
         url='https://github.com/ENHANCE-PET/LION/releases/download/lionz-v.1.0.0/clin_pt_fdg_5235_17122025.zip',
         checksum=None,
         filename='lion_fdg.zip',
@@ -93,11 +108,15 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
         variants={
             'fdg': 'https://github.com/ENHANCE-PET/LION/releases/download/lionz-v.1.0.0/clin_pt_fdg_5235_17122025.zip',
             'psma': 'https://github.com/ENHANCE-PET/LION/releases/download/lionz-v.1.0.0/clin_pt_psma_2046_25112025.zip',
-        }
+        },
+        variant_task_ids={
+            'fdg': 'Dataset789_fdg',
+            'psma': 'Dataset711_psma',
+        },
     ),
     'deep_psma': ModelInfo(
         name='deep_psma',
-        task_id='Dataset881_PSMA_PET',
+        task_id='Dataset881_deep_psma',
         url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA.git',
         checksum=None,
         filename='deep_psma.zip',
@@ -108,7 +127,7 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
     ),
     'total': ModelInfo(
         name='total',
-        task_id='Dataset291',
+        task_id='Dataset291_total_organs',
         url='https://github.com/wasserth/TotalSegmentator',
         checksum=None,
         filename='total.zip',
@@ -122,11 +141,19 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
             'lung_vessels': 'Lung vessel segmentation',
             'body': 'Body region segmentation',
             'vertebrae_mr': 'Vertebrae MR segmentation',
-        }
+        },
+        variant_task_ids={
+            'total': 'Dataset291_total_organs',
+            'total_fast': 'Dataset297_total_fast',
+            'total_fastest': 'Dataset298_total_fastest',
+            'total_mr': 'Dataset850_total_mr_organs',
+            'body': 'Dataset299_body',
+            'lung_vessels': 'Dataset117_lung_vessels',
+        },
     ),
     'total_mr': ModelInfo(
         name='total_mr',
-        task_id='Dataset850',
+        task_id='Dataset850_total_mr_organs',
         url='https://github.com/wasserth/TotalSegmentator',
         checksum=None,
         filename='total_mr.zip',
@@ -135,7 +162,7 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
     ),
     'ts2d': ModelInfo(
         name='ts2d',
-        task_id='Dataset900',
+        task_id='Dataset900_ts2d_v2_organs',
         url='https://zenodo.org/records/16985939',
         checksum=None,
         filename='ts2d_v2.zip',
@@ -148,7 +175,7 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
     ),
     'dukeseg': ModelInfo(
         name='dukeseg',
-        task_id='Dataset1004',
+        task_id='Dataset1004_dukeseg_skeleton',
         url='https://gitlab.oit.duke.edu/cvit-public/dukeseg_public.git',
         checksum=None,
         filename='dukeseg.zip',
@@ -159,7 +186,12 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
             'skeleton': 'Dataset1004 - 62 bone structures',
             'model2': 'Dataset1001 - 61 head/neck/thorax/muscles',
             'model3': 'Dataset1002 - 17 abdominal organs',
-        }
+        },
+        variant_task_ids={
+            'skeleton': 'Dataset1004_dukeseg_skeleton',
+            'model2': 'Dataset1001_dukeseg_model2',
+            'model3': 'Dataset1002_dukeseg_model3',
+        },
     ),
 }
 
@@ -267,6 +299,7 @@ def download_file(
 def clone_git_lfs_repo(
     repo_url: str,
     output_dir: Path,
+    task_id: str,
     target_subdir: Optional[str] = None
 ) -> Optional[Path]:
     """
@@ -274,7 +307,8 @@ def clone_git_lfs_repo(
 
     Args:
         repo_url: Git repository URL
-        output_dir: Output directory
+        output_dir: Task output directory
+        task_id: Canonical task id directory (Dataset<数字>_<model_name>)
         target_subdir: Subdirectory to extract from repo
 
     Returns:
@@ -308,23 +342,20 @@ def clone_git_lfs_repo(
 
         logger.info("Git LFS clone completed successfully")
 
-        # If target_subdir specified, copy that directory
+        source_path = clone_dir
         if target_subdir:
-            source_path = clone_dir / target_subdir
-            if source_path.exists():
-                # Copy to output_dir
-                for item in source_path.iterdir():
-                    dest = output_dir / item.name
-                    if dest.exists():
-                        shutil.rmtree(dest)
-                    shutil.copytree(item, dest)
-                logger.info(f"Model files copied from: {source_path}")
-                return output_dir
+            candidate = clone_dir / target_subdir
+            if candidate.exists():
+                source_path = candidate
             else:
                 logger.warning(f"Target subdirectory not found: {source_path}")
-                return clone_dir
 
-        return clone_dir
+        model_dir = organize_nnunet_model(source_path, output_dir, task_id)
+
+        if clone_dir.exists():
+            shutil.rmtree(clone_dir)
+
+        return model_dir
 
     except subprocess.TimeoutExpired:
         logger.error("Git LFS clone timed out")
@@ -364,50 +395,73 @@ def extract_archive(archive_path: Path, extract_dir: Path) -> bool:
         return False
 
 
-def organize_nnunet_model(extract_dir: Path, output_dir: Path, task_id: str) -> Path:
+def organize_nnunet_model(source_dir: Path, output_dir: Path, task_id: str) -> Path:
     """
-    Organize extracted nnUNet model into correct structure.
+    Organize source nnUNet model into canonical structure.
 
-    nnUNet expects models in:
-    nnUNet_results/DatasetXXX_NAME/nnUNetTrainer__xxx/fold_X/
+    Canonical destination:
+      {output_dir}/{task_id}/<nnUNetTrainer... and/or dataset.json/plans.json>
 
     Args:
-        extract_dir: Extracted archive directory
+        source_dir: Source directory containing or wrapping model payload
         output_dir: Output directory
-        task_id: Task ID (e.g., Dataset789_Tumors)
+        task_id: Canonical task id (e.g., Dataset789_fdg)
 
     Returns:
         Path to organized model directory
     """
+    if not is_canonical_task_id(task_id):
+            raise ValueError(
+            f"Invalid task_id '{task_id}'. Expected canonical format "
+            "'Dataset<数字>_<model_name>'."
+        )
+
     model_dir = output_dir / task_id
+    payload_root = find_model_payload_root(source_dir, task_id)
+    if payload_root is None:
+        raise FileNotFoundError(
+            f"Could not find nnUNet payload for '{task_id}' under {source_dir}"
+        )
 
-    # Find the actual model directory in the extracted content
-    possible_paths = [
-        extract_dir / task_id,
-        extract_dir / 'nnUNet_results' / task_id,
-    ]
+    if model_dir.exists():
+        shutil.rmtree(model_dir)
+    shutil.copytree(payload_root, model_dir)
+    normalize_model_directory(model_dir, task_id)
+    if not has_model_payload(model_dir):
+        raise RuntimeError(
+            f"Canonical model directory has no nnUNet payload after normalization: {model_dir}"
+        )
+    logger.info(f"Model organized to canonical path: {model_dir}")
+    return model_dir
 
-    for path in possible_paths:
-        if path.exists():
-            if model_dir.exists():
-                shutil.rmtree(model_dir)
-            shutil.copytree(path, model_dir)
-            logger.info(f"Model organized to: {model_dir}")
-            return model_dir
 
-    # If not found, check for any Dataset directory
-    for item in extract_dir.rglob('Dataset*'):
-        if item.is_dir():
-            target = output_dir / item.name
-            if target.exists():
-                shutil.rmtree(target)
-            shutil.copytree(item, target)
-            logger.info(f"Model organized to: {target}")
-            return target
+def find_external_nnunet_source(task_id: str) -> Optional[Path]:
+    """
+    Auto-discover external nnUNet model roots and return payload root for task_id.
 
-    # Return extract_dir if nothing found
-    logger.warning(f"Could not find expected model structure, using: {extract_dir}")
-    return extract_dir
+    Searches common locations used by TotalSegmentator/nnUNet.
+    """
+    candidates = []
+    env_results = os.environ.get("nnUNet_results")
+    if env_results:
+        candidates.append(Path(env_results).expanduser())
+    candidates.extend(
+        [
+            Path.home() / ".totalsegmentator" / "nnunet" / "results",
+            Path.home() / ".totalsegmetnator" / "nnunet" / "results",
+            Path.home() / ".nnunet" / "nnUNet_results",
+            Path.home() / "nnUNet_results",
+        ]
+    )
+
+    for root in candidates:
+        if not root.exists():
+            continue
+        payload_root = find_model_payload_root(root, task_id)
+        if payload_root is not None:
+            logger.info("Found nnUNet payload for %s under %s", task_id, payload_root)
+            return payload_root
+    return None
 
 
 def download_model(
@@ -436,6 +490,9 @@ def download_model(
         return None
 
     model = AVAILABLE_MODELS[task_name]
+    selected_task_id = model.task_id
+    task_output_dir = output_dir / task_name
+    task_output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info(f"Downloading model: {model.name}")
     logger.info(f"Task ID: {model.task_id}")
@@ -446,15 +503,22 @@ def download_model(
     if variant and model.variants and variant in model.variants:
         download_url = model.variants[variant]
         logger.info(f"Using variant: {variant}")
+    if variant and model.variant_task_ids and variant in model.variant_task_ids:
+        selected_task_id = model.variant_task_ids[variant]
+        logger.info(f"Using task ID for variant: {selected_task_id}")
 
-    # Create output directory
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if not is_canonical_task_id(selected_task_id):
+        raise ValueError(
+            f"Configured task_id '{selected_task_id}' for task '{task_name}' is not canonical "
+            "(expected Dataset<数字>_<model_name>)."
+        )
 
     if model.method == DownloadMethod.GIT_LFS:
         # Git LFS clone
         model_path = clone_git_lfs_repo(
             model.github_repo,
-            output_dir,
+            task_output_dir,
+            selected_task_id,
             model.target_subdir
         )
         return model_path
@@ -489,12 +553,17 @@ def download_model(
             else:
                 logger.info("TotalSegmentator already installed")
             
-            # Create a marker file to indicate models are available
-            marker_file = output_dir / f"{model.name}_installed.txt"
-            marker_file.write_text(f"TotalSegmentator installed for {model.name}\n")
-            logger.info(f"Models will be downloaded to: ~/.totalsegmentator/nnunet/results/")
-            
-            return output_dir
+            payload_source = find_external_nnunet_source(selected_task_id)
+            if payload_source is None:
+                logger.error(
+                    "Could not auto-discover nnUNet payload for %s. "
+                    "Please ensure the model has been downloaded by TotalSegmentator first.",
+                    selected_task_id,
+                )
+                return None
+
+            dataset_dir = organize_nnunet_model(payload_source, task_output_dir, selected_task_id)
+            return dataset_dir
             
         except Exception as e:
             logger.error(f"PIP installation failed: {e}")
@@ -502,7 +571,7 @@ def download_model(
 
     elif model.method == DownloadMethod.DIRECT:
         # Direct HTTP download
-        archive_path = output_dir / model.filename
+        archive_path = task_output_dir / model.filename
 
         if archive_path.exists():
             logger.info(f"Archive already exists: {archive_path}")
@@ -519,12 +588,12 @@ def download_model(
 
         # Extract if requested
         if extract:
-            extract_dir = output_dir / f"{model.filename}_extracted"
+            extract_dir = task_output_dir / f"{model.filename}_extracted"
             if not extract_archive(archive_path, extract_dir):
                 return None
 
             # Organize into nnUNet structure
-            model_path = organize_nnunet_model(extract_dir, output_dir, model.task_id)
+            model_path = organize_nnunet_model(extract_dir, task_output_dir, selected_task_id)
 
             # Cleanup
             shutil.rmtree(extract_dir)

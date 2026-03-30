@@ -66,7 +66,7 @@ class GTRCTask(BaseTask):
             models={
                 'gtrc_psma': ModelInfo(
                     name='gtrc_psma',
-                    task_id='Dataset881_PSMA_PET',
+                    task_id='Dataset881_gtrc_psma',
                     url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
                     checksum=None,  # Git LFS handles integrity
                     labels={
@@ -81,7 +81,7 @@ class GTRCTask(BaseTask):
                 ),
                 'gtrc_fdg': ModelInfo(
                     name='gtrc_fdg',
-                    task_id='Dataset882_FDG_PET',
+                    task_id='Dataset882_gtrc_fdg',
                     url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
                     checksum=None,  # Git LFS handles integrity
                     labels={
@@ -96,7 +96,7 @@ class GTRCTask(BaseTask):
                 ),
                 'gtrc_lupsma': ModelInfo(
                     name='gtrc_lupsma',
-                    task_id='Dataset883_LuPSMA_SPECT',
+                    task_id='Dataset883_gtrc_lupsma',
                     url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
                     checksum=None,  # Git LFS handles integrity
                     labels={

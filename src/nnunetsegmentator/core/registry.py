@@ -19,6 +19,14 @@ from .exceptions import (
     TaskNotFoundError,
     ModelNotFoundError,
 )
+from ..utils.model_layout import (
+    dataset_prefix,
+    find_model_payload_root,
+    has_model_payload,
+    is_canonical_model_key,
+    is_canonical_task_id,
+    normalize_model_directory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +115,13 @@ class TaskRegistry:
     @classmethod
     def register(cls, task: TaskDefinition) -> None:
         """Register a new segmentation task"""
+        for model_name, model_info in task.models.items():
+            if not is_canonical_task_id(model_info.task_id):
+                raise ConfigurationError(
+                    f"Invalid task_id '{model_info.task_id}' for model '{model_name}' in task "
+                    f"'{task.name}'. task_id must use canonical format "
+                    "'Dataset<数字>_<model_name>'."
+                )
         cls._tasks[task.name] = task
         logger.info(f"Registered task: {task.name}")
         
@@ -135,12 +150,35 @@ class TaskRegistry:
         """Register local model path"""
         cls._model_paths[model_name] = Path(path)
         logger.info(f"Registered model path: {model_name} -> {path}")
+
+    @classmethod
+    def _has_model_payload(cls, path: Path) -> bool:
+        """Check whether a directory looks like an nnUNet model root."""
+        return has_model_payload(path)
+
+    @classmethod
+    def _normalize_model_directory(cls, target_path: Path, task_id: str) -> Path:
+        """
+        Normalize installed layout so `{task_id}` directly contains model artifacts.
+
+        Example normalized target:
+            .../{task_name}/{task_id}/nnUNetTrainer__.../
+            .../{task_name}/{task_id}/dataset.json
+        """
+        return normalize_model_directory(target_path, task_id)
         
     @classmethod
     def get_model_path(cls, model_name: str) -> Path:
         """Get model path, download if necessary"""
-        if model_name not in cls._model_paths:
-            cls._download_model(model_name)
+        if model_name in cls._model_paths:
+            # Verify that the path actually contains dataset.json or plans.json
+            path = cls._model_paths[model_name]
+            if cls._has_model_payload(path):
+                return path
+            # If still not valid, re-download or re-resolve
+            del cls._model_paths[model_name]
+        
+        cls._download_model(model_name)
         return cls._model_paths[model_name]
     
     @classmethod
@@ -158,10 +196,33 @@ class TaskRegistry:
                         str(Path.home() / ".nnunetsegmentator" / "models"),
                     )
                 )
-                conventional_path = model_root / task.name / model_info.task_id
-                if conventional_path.exists():
-                    cls.register_model_path(model_name, conventional_path)
-                    return
+                
+                task_dir = model_root / task.name
+                target_path = task_dir / model_info.task_id
+                legacy_path = task_dir / dataset_prefix(model_info.task_id)
+                if not target_path.exists() and legacy_path.exists():
+                    legacy_payload_root = find_model_payload_root(legacy_path, model_info.task_id)
+                    if legacy_payload_root:
+                        logger.info(
+                            "Migrating legacy model dir for '%s': %s -> %s",
+                            model_name,
+                            legacy_payload_root,
+                            target_path,
+                        )
+                        target_path.parent.mkdir(parents=True, exist_ok=True)
+                        if legacy_payload_root == legacy_path:
+                            shutil.move(str(legacy_path), str(target_path))
+                        else:
+                            if target_path.exists():
+                                shutil.rmtree(target_path)
+                            shutil.copytree(legacy_payload_root, target_path)
+                        cls._normalize_model_directory(target_path, model_info.task_id)
+
+                if target_path.exists():
+                    cls._normalize_model_directory(target_path, model_info.task_id)
+                    if cls._has_model_payload(target_path):
+                        cls.register_model_path(model_name, target_path)
+                        return
 
                 if model_info.url.endswith(".git"):
                     raise ModelNotFoundError(
@@ -176,44 +237,61 @@ class TaskRegistry:
                     )
 
                 logger.info(f"Model {model_name} needs to be downloaded from {model_info.url}")
-                downloader = ModelDownloader(model_dir=model_root / task.name)
+                downloader = ModelDownloader(model_dir=task_dir)
                 model_path = downloader.download_model(
                     model_name=model_name,
+                    target_dir_name=model_info.task_id,
                     url=model_info.url,
                     checksum=model_info.checksum,
                 )
-                
-                # Register the path
-                cls.register_model_path(model_name, model_path)
+
+                final_path = model_path
+                cls._normalize_model_directory(final_path, model_info.task_id)
+                if not cls._has_model_payload(final_path):
+                    raise ModelNotFoundError(model_name, task.name)
+
+                cls.register_model_path(model_name, final_path)
                 return
         
         raise ModelNotFoundError(model_name)
+
+    @classmethod
+    def _canonical_model_key(cls, model_name: str, model_info: ModelInfo) -> str:
+        """Build canonical key (same as canonical task_id)."""
+        return model_info.task_id
 
     @classmethod
     def _resolve_model_name_in_task(cls, task: TaskDefinition, model_identifier: str) -> str:
         """
         Resolve a model identifier within a task.
 
-        The identifier can be either:
-        - model name (e.g. "total_organs")
-        - task ID (e.g. "Dataset291")
+        Supported identifier format is canonical key only:
+        - Dataset<数字>_<model_name> (e.g. Dataset291_total_organs), exactly equal to task_id
         """
-        if model_identifier in task.models:
-            return model_identifier
-
-        matched = [
-            model_name
+        canonical_to_model = {
+            cls._canonical_model_key(model_name, model_info): model_name
             for model_name, model_info in task.models.items()
-            if model_info.task_id == model_identifier
-        ]
-        if len(matched) == 1:
-            return matched[0]
-        if len(matched) > 1:
+        }
+        if model_identifier in canonical_to_model:
+            return canonical_to_model[model_identifier]
+
+        if model_identifier in task.models or any(
+            dataset_prefix(model_info.task_id) == model_identifier
+            for model_info in task.models.values()
+        ):
             raise ConfigurationError(
-                f"Ambiguous model identifier '{model_identifier}' for task '{task.name}'. "
-                f"Matched model names: {', '.join(sorted(matched))}"
+                f"Identifier '{model_identifier}' is not supported. "
+                "Use canonical key format 'Dataset<数字>_<model_name>', e.g. "
+                f"'{next(iter(sorted(canonical_to_model)))}'."
             )
-        raise ModelNotFoundError(model_identifier, task_name=task.name)
+
+        if is_canonical_model_key(model_identifier):
+            raise ModelNotFoundError(model_identifier, task_name=task.name)
+
+        raise ConfigurationError(
+            f"Invalid model identifier '{model_identifier}'. "
+            "Expected canonical key format 'Dataset<数字>_<model_name>'."
+        )
 
     @classmethod
     def install_task_models_from_local(
@@ -228,7 +306,7 @@ class TaskRegistry:
         Args:
             task_name: Registered task name.
             model_sources: Mapping of model identifiers to local paths.
-                Keys can be model names or task IDs.
+                Keys must be canonical keys: Dataset<数字>_<model_name> (same as task_id).
                 Values can be directories (unzipped) or archives (.zip/.tar/.tar.gz/.tgz).
             force: Overwrite existing installed model directories.
 
@@ -285,6 +363,16 @@ class TaskRegistry:
             else:
                 raise ValueError(f"Invalid local model source for '{identifier}': {source_path}")
 
+            cls._normalize_model_directory(target_path, model_info.task_id)
+            if not cls._has_model_payload(target_path):
+                detected = find_model_payload_root(target_path, model_info.task_id)
+                if detected and detected != target_path:
+                    cls._normalize_model_directory(target_path, model_info.task_id)
+            if not cls._has_model_payload(target_path):
+                raise ConfigurationError(
+                    f"Installed directory for '{identifier}' does not contain nnUNet payload "
+                    f"(expected under {target_path})."
+                )
             cls.register_model_path(model_name, target_path)
             installed[model_name] = target_path
             logger.info(

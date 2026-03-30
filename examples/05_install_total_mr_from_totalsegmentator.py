@@ -45,11 +45,11 @@ def find_totalsegmentator_results_root() -> Path:
 
 def discover_total_mr_sources(results_root: Path) -> Dict[str, Path]:
     """
-    Discover model source directories keyed by task ID ("850", "852").
+    Discover model source directories keyed by canonical identifiers.
     """
     patterns = {
-        "850": re.compile(r"dataset850", re.IGNORECASE),
-        "852": re.compile(r"dataset852", re.IGNORECASE),
+        "Dataset850_total_mr_organs": re.compile(r"dataset850", re.IGNORECASE),
+        "Dataset852_total_mr_fast": re.compile(r"dataset852", re.IGNORECASE),
     }
 
     discovered: Dict[str, Path] = {}
@@ -57,9 +57,9 @@ def discover_total_mr_sources(results_root: Path) -> Dict[str, Path]:
         if not child.is_dir():
             continue
         name = child.name
-        for task_id, rx in patterns.items():
+        for canonical_key, rx in patterns.items():
             if rx.search(name):
-                discovered[task_id] = child.resolve()
+                discovered[canonical_key] = child.resolve()
 
     return discovered
 
@@ -90,19 +90,20 @@ def main() -> None:
         )
 
     print("Discovered source model directories:")
-    for task_id, src in discovered.items():
-        print(f"  - {task_id}: {src}")
+    for canonical_key, src in discovered.items():
+        print(f"  - {canonical_key}: {src}")
 
     if args.dry_run:
         target_root = Path.home() / ".nnunetsegmentator" / "models" / "total_mr"
         print("\nDry run (no files copied):")
-        for task_id in sorted(discovered):
-            print(f"  - would install task_id={task_id} -> {target_root / task_id}")
+        for canonical_key in sorted(discovered):
+            dataset_id = canonical_key.split("_", 1)[0]
+            print(f"  - would install {canonical_key} -> {target_root / dataset_id}")
         return
 
     installed = TaskRegistry.install_task_models_from_local(
         task_name="total_mr",
-        model_sources=discovered,  # keyed by task ID as requested
+        model_sources=discovered,
         force=args.force,
     )
 

@@ -12,6 +12,14 @@ This guide explains how task-model wiring works at runtime and how to add or ext
 | Pipeline execution | `src/nnunetsegmentator/pipeline/builders.py` + steps | Inference steps use `model_name`; registry resolves the actual path. |
 | Model acquisition | `src/nnunetsegmentator/core/registry.py` | Download path: `get_model_path`; local path install: `install_task_models_from_local`. |
 
+## Canonical task/model standard
+
+- `task_id` must be exactly `Dataset<数字>_<model_name>`.
+- Install key must be exactly the same `task_id`.
+- Canonical installed path is `{model_root}/{task_name}/{task_id}`.
+- Under `{task_id}`, nnUNet payload must exist directly (`nnUNetTrainer*` and/or `dataset.json` / `plans.json`), without wrapper layers.
+- Runtime still resolves by `model_name`; registry maps it to canonical `task_id` path.
+
 ## 2. Add a new built-in task (inside this repo)
 
 | Item | Requirement |
@@ -41,7 +49,7 @@ class MyTask(BaseTask):
             models={
                 "my_model": ModelInfo(
                     name="my_model",
-                    task_id="999",
+                    task_id="Dataset999_my_model",
                     url="https://example.com/my_model.zip",
                     checksum="",
                     labels={"target": 1},
@@ -75,9 +83,9 @@ class MyTask(BaseTask):
 
 | Interface | Example | Key format |
 |---|---|---|
-| Python API | `TaskRegistry.install_task_models_from_local(task_name="total", model_sources={"total_organs": "/local/total_organs.zip", "292": "/local/total_vertebrae/"}, force=True)` | Model name or task ID |
-| CLI | `nnunetsegmentator install-models --task total --model total_organs=/local/total_organs.zip --model 292=/local/total_vertebrae/ --force` | Model name or task ID |
-| Script | `python scripts/model_manager.py --install-local --task total --model total_organs=/local/total_organs.zip` | Model name or task ID |
+| Python API | `TaskRegistry.install_task_models_from_local(task_name="total", model_sources={"Dataset291_total_organs": "/local/total_organs.zip", "Dataset292_total_vertebrae": "/local/total_vertebrae/"}, force=True)` | `Dataset<数字>_<model_name>` |
+| CLI | `nnunetsegmentator install-models --task total --model Dataset291_total_organs=/local/total_organs.zip --model Dataset292_total_vertebrae=/local/total_vertebrae/ --force` | `Dataset<数字>_<model_name>` |
+| Script | `python scripts/model_manager.py --install-local --task total --model Dataset291_total_organs=/local/total_organs.zip` | `Dataset<数字>_<model_name>` |
 
 ## 5. Validation checklist
 

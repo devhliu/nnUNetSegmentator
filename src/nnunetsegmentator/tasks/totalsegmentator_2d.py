@@ -181,7 +181,7 @@ class TS2DTask(BaseTask):
             # 5-part model strategy for TS2D v2
             "ts2d_v2_organs": ModelInfo(
                 name="ts2d_v2_organs",
-                task_id="900",
+                task_id="Dataset900_ts2d_v2_organs",
                 url=f"{base_url}/ts2d_v2_organs.zip",
                 checksum="",
                 labels=TS2D_PART_ORGANS,
@@ -192,7 +192,7 @@ class TS2DTask(BaseTask):
             ),
             "ts2d_v2_vertebrae": ModelInfo(
                 name="ts2d_v2_vertebrae",
-                task_id="901",
+                task_id="Dataset901_ts2d_v2_vertebrae",
                 url=f"{base_url}/ts2d_v2_vertebrae.zip",
                 checksum="",
                 labels=TS2D_PART_VERTEBRAE,
@@ -203,7 +203,7 @@ class TS2DTask(BaseTask):
             ),
             "ts2d_v2_cardiac": ModelInfo(
                 name="ts2d_v2_cardiac",
-                task_id="902",
+                task_id="Dataset902_ts2d_v2_cardiac",
                 url=f"{base_url}/ts2d_v2_cardiac.zip",
                 checksum="",
                 labels=TS2D_PART_CARDIAC,
@@ -214,7 +214,7 @@ class TS2DTask(BaseTask):
             ),
             "ts2d_v2_muscles": ModelInfo(
                 name="ts2d_v2_muscles",
-                task_id="903",
+                task_id="Dataset903_ts2d_v2_muscles",
                 url=f"{base_url}/ts2d_v2_muscles.zip",
                 checksum="",
                 labels=TS2D_PART_MUSCLES,
@@ -225,7 +225,7 @@ class TS2DTask(BaseTask):
             ),
             "ts2d_v2_ribs": ModelInfo(
                 name="ts2d_v2_ribs",
-                task_id="904",
+                task_id="Dataset904_ts2d_v2_ribs",
                 url=f"{base_url}/ts2d_v2_ribs.zip",
                 checksum="",
                 labels=TS2D_PART_RIBS,
@@ -350,7 +350,7 @@ class TSXRTask(BaseTask):
         models = {
             "tsxr_v2": ModelInfo(
                 name="tsxr_v2",
-                task_id="910",
+                task_id="Dataset910_tsxr_v2",
                 url=f"{base_url}/tsxr_v2.zip",
                 checksum="",
                 labels=TS2D_LABELS,

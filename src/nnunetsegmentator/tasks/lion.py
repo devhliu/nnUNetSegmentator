@@ -79,7 +79,7 @@ class LIONTask(BaseTask):
             models={
                 'fdg': ModelInfo(
                     name='fdg',
-                    task_id='Dataset789_Tumors',
+                    task_id='Dataset789_fdg',
                     url='https://github.com/ENHANCE-PET/LION/releases/download/lionz-v.1.0.0/clin_pt_fdg_5235_17122025.zip',
                     checksum=None,
                     labels={
@@ -92,7 +92,7 @@ class LIONTask(BaseTask):
                 ),
                 'psma': ModelInfo(
                     name='psma',
-                    task_id='Dataset711_PSMA',
+                    task_id='Dataset711_psma',
                     url='https://github.com/ENHANCE-PET/LION/releases/download/lionz-v.1.0.0/clin_pt_psma_2046_25112025.zip',
                     checksum=None,
                     labels={
@@ -127,7 +127,7 @@ class LIONTask(BaseTask):
                         'name': 'lion_inference',
                         'params': {
                             'model_path': '${model_path}',
-                            'folds': [0, 1, 2, 3, 4],
+                            'folds': ('all',),
                             'use_mirroring': True
                         }
                     },
@@ -197,7 +197,7 @@ class LIONTask(BaseTask):
         # Inference
         pipeline.add_step(nnUNetInferenceStep(
             'inference',
-            {'folds': [0, 1, 2, 3, 4], 'use_mirroring': True}
+            {'folds': ('all',), 'use_mirroring': True}
         ))
         
         # Postprocessing
