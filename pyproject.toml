@@ -5,20 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "nnunetsegmentator"
 version = "0.2.0"
-description = "Unified nnUNet Segmentation Framework for Medical Imaging"
+description = "A unified framework for medical image segmentation with multiple nnUNet models"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "nnunetsegmentator Contributors"}
+    {name = "devhliu"}
 ]
 maintainers = [
-    {name = "nnunetsegmentator Contributors"}
+    {name = "devhliu"}
 ]
 keywords = [
     "medical-imaging",
     "segmentation",
     "deep-learning",
     "nnunetv2",
+    "nnunet",
     "oncology",
     "pet-ct",
     "pet",
@@ -30,7 +31,15 @@ keywords = [
     "gtrc-net",
     "lion",
     "deep-psma",
-    "dukeseg"
+    "dukeseg",
+    "mrsegmentator",
+    "medical-image-analysis",
+    "computer-vision",
+    "artificial-intelligence",
+    "machine-learning",
+    "healthcare",
+    "radiology",
+    "clinical-imaging"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

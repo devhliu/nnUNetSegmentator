@@ -314,8 +314,8 @@ class Config:
         
         Examples:
             >>> config = Config()
-            >>> config.get_model_path('gtrc', 'Dataset881_gtrc_psma')
-            Path('/home/user/.nnunetsegmentator/models/gtrc/Dataset881_gtrc_psma')
+            >>> config.get_model_path('gtrc', 'Dataset881_PSMA_PET')
+            Path('/home/user/.nnunetsegmentator/models/gtrc/Dataset881_PSMA_PET')
             
             >>> config.get_model_path('lion')
             Path('/home/user/.nnunetsegmentator/models/lion')

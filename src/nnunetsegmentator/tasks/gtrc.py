@@ -66,13 +66,11 @@ class GTRCTask(BaseTask):
             models={
                 'gtrc_psma': ModelInfo(
                     name='gtrc_psma',
-                    task_id='Dataset881_gtrc_psma',
+                    task_id='Dataset881_PSMA_PET',
                     url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
                     checksum=None,  # Git LFS handles integrity
                     labels={
-                        'tumor_core': 1,
-                        'tumor_edema': 2,
-                        'tumor_enhancing': 3
+                        'tumor_burden': 1
                     },
                     modality='PETCT',
                     description='GTRC-Net PSMA PET: Total tumor burden segmentation',
@@ -81,13 +79,11 @@ class GTRCTask(BaseTask):
                 ),
                 'gtrc_fdg': ModelInfo(
                     name='gtrc_fdg',
-                    task_id='Dataset882_gtrc_fdg',
+                    task_id='Dataset882_FDG_PET',
                     url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
                     checksum=None,  # Git LFS handles integrity
                     labels={
-                        'tumor_core': 1,
-                        'tumor_edema': 2,
-                        'tumor_enhancing': 3
+                        'tumor_burden': 1
                     },
                     modality='PETCT',
                     description='GTRC-Net FDG PET: Total tumor burden segmentation',
@@ -96,13 +92,11 @@ class GTRCTask(BaseTask):
                 ),
                 'gtrc_lupsma': ModelInfo(
                     name='gtrc_lupsma',
-                    task_id='Dataset883_gtrc_lupsma',
+                    task_id='Dataset883_LUPSMA_SPECT',
                     url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
                     checksum=None,  # Git LFS handles integrity
                     labels={
-                        'tumor_core': 1,
-                        'tumor_edema': 2,
-                        'tumor_enhancing': 3
+                        'tumor_burden': 1
                     },
                     modality='SPECTCT',
                     description='GTRC-Net LuPSMA SPECT: Total tumor burden segmentation',
@@ -163,9 +157,7 @@ class GTRCTask(BaseTask):
             output_config={
                 'format': 'NIfTI',
                 'labels': {
-                    1: 'tumor_core',
-                    2: 'tumor_edema',
-                    3: 'tumor_enhancing'
+                    1: 'tumor_burden'
                 },
                 'save_individual_labels': True
             }

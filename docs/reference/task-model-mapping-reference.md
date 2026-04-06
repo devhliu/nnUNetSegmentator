@@ -31,9 +31,9 @@ Canonical schema:
 | `dukeseg` | `dukeseg_skeleton` | `Dataset1004_dukeseg_skeleton` | `CT` | Canonical task_id. |
 | `dukeseg` | `dukeseg_model2` | `Dataset1001_dukeseg_model2` | `CT` | Canonical task_id. |
 | `dukeseg` | `dukeseg_model3` | `Dataset1002_dukeseg_model3` | `CT` | Canonical task_id. |
-| `gtrc` | `gtrc_psma` | `Dataset881_gtrc_psma` | `PETCT` | Canonical task_id. |
-| `gtrc` | `gtrc_fdg` | `Dataset882_gtrc_fdg` | `PETCT` | Canonical task_id. |
-| `gtrc` | `gtrc_lupsma` | `Dataset883_gtrc_lupsma` | `SPECTCT` | Canonical task_id. |
+| `gtrc` | `gtrc_psma` | `Dataset881_PSMA_PET` | `PETCT` | Canonical task_id. |
+| `gtrc` | `gtrc_fdg` | `Dataset882_FDG_PET` | `PETCT` | Canonical task_id. |
+| `gtrc` | `gtrc_lupsma` | `Dataset883_LUPSMA_SPECT` | `SPECTCT` | Canonical task_id. |
 | `heartchambers_highres` | `heartchambers_highres` | `Dataset301_heartchambers_highres` | `CT` | Canonical task_id. |
 | `kidney_cysts` | `kidney_cysts` | `Dataset1504_kidney_cysts` | `CT` | Canonical task_id. |
 | `lion` | `fdg` | `Dataset789_fdg` | `PT` | Canonical task_id. |
@@ -56,6 +56,7 @@ Canonical schema:
 | `total` | `total_fastest` | `Dataset298_total_fastest` | `CT` | Canonical task_id. |
 | `total_mr` | `total_mr_organs` | `Dataset850_total_mr_organs` | `MR` | Canonical task_id. |
 | `total_mr` | `total_mr_fast` | `Dataset852_total_mr_fast` | `MR` | Canonical task_id. |
+| `mrsegmentator` | `mrsegmentator` | `Dataset1500_mrsegmentator` | `MR` | Canonical task_id. |
 | `ts2d` | `ts2d_v2_organs` | `Dataset900_ts2d_v2_organs` | `CT` | Canonical task_id. |
 | `ts2d` | `ts2d_v2_vertebrae` | `Dataset901_ts2d_v2_vertebrae` | `CT` | Canonical task_id. |
 | `ts2d` | `ts2d_v2_cardiac` | `Dataset902_ts2d_v2_cardiac` | `CT` | Canonical task_id. |

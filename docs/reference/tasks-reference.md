@@ -135,6 +135,36 @@ This document provides detailed information about each supported segmentation ta
 3. nnUNet inference (5 folds)
 4. Postprocessing (varies by structure)
 
+### MRSegmentator
+
+**Task ID:** `mrsegmentator`
+
+**Modality:** MR, CT
+
+**Description:** Multi-modality segmentation of 40 classes in MRI and CT
+
+**Labels:** 40 anatomical structures
+- Organs: spleen, kidneys, gallbladder, liver, stomach, pancreas, adrenal glands, lungs, heart
+- Vessels: aorta, inferior vena cava, portal vein, iliac arteries/veins
+- GI tract: esophagus, small bowel, duodenum, colon, urinary bladder
+- Bones: spine, sacrum, hips, femurs
+- Muscles: autochthonous, iliopsoas, gluteus (maximus, medius, minimus)
+
+**Default Resolution:** 1.5mm isotropic
+
+**Input Requirements:**
+- MRI or CT image
+- NIfTI, DICOM, MHA, or NRRD format
+- Works on T1-weighted, T2-weighted, Dixon sequences, and CT
+
+**Pipeline Steps:**
+1. Resample to 1.5mm isotropic
+2. Z-score normalization
+3. nnUNet inference (5 folds)
+4. Keep largest connected component for organs
+
+**Citation:** Häntze et al., Radiology: Artificial Intelligence (2024). https://doi.org/10.1148/ryai.240777
+
 ## Task Selection
 
 ### Choose Based on Modality
@@ -142,12 +172,16 @@ This document provides detailed information about each supported segmentation ta
 - **PET/CT:** GTRC-Net
 - **PET:** LION, DEEP-PSMA
 - **CT:** TotalSegmentator, DukeSeg
+- **MR:** MRSegmentator, TotalSegmentator MR
+- **Multi-modality (MR/CT):** MRSegmentator
 
 ### Choose Based on Structures
 
 - **Glioblastoma:** GTRC-Net
 - **Lesions:** LION, DEEP-PSMA
-- **Comprehensive anatomy:** TotalSegmentator, DukeSeg
+- **Comprehensive anatomy (CT):** TotalSegmentator, DukeSeg
+- **Comprehensive anatomy (MR):** MRSegmentator, TotalSegmentator MR
+- **Abdominal/pelvic/thorax (MR):** MRSegmentator
 
 ## Custom Tasks
 

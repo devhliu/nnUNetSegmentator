@@ -1,181 +1,206 @@
-# nnunetsegmentator
+<div align="center">
 
-[![Tests](https://img.shields.io/badge/tests-pytest-blue.svg)](https://pytest.org)
-[![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://www.mypy-lang.org)
+# nnUNetSegmentator
+
+**A Unified Framework for Medical Image Segmentation**
+
+[![PyPI version](https://badge.fury.io/py/nnunetsegmentator.svg)](https://badge.fury.io/py/nnunetsegmentator)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org)
+[![Tests](https://img.shields.io/badge/tests-pytest-blue.svg)](https://pytest.org)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Type Checking](https://img.shields.io/badge/type%20checking-mypy-blue.svg)](https://mypy-lang.org)
 
-A comprehensive framework for managing multiple nnUNet-based segmentation tasks with support for complex processing pipelines, multiple I/O formats, and both Python and CLI interfaces.
+[📖 Documentation](docs/) • [🚀 Quick Start](#quick-start) • [📦 Installation](#installation) • [🎯 Examples](examples/) • [🤝 Contributing](CONTRIBUTING.md)
 
-## Purpose & Scope
+</div>
 
-**nnunetsegmentator** provides a **universal nnUNetv2-based segmentation framework** that unifies multiple state-of-the-art medical image segmentation models under a single, easy-to-use interface. This repository serves as a comprehensive toolkit for researchers and clinicians to access various pretrained segmentation models without needing to understand the underlying implementation details of each model.
+---
 
-### What Makes It Unique
+## 📋 Table of Contents
 
-- **Unified Interface**: Access 21+ segmentation models with a single API
-- **Flexible Pipelines**: Build custom processing workflows from reusable steps
-- **Production Ready**: Battle-tested in clinical research environments
-- **Developer Friendly**: Clean architecture, comprehensive documentation, and extensive examples
-- **Extensible**: Easy to add new tasks, models, and pipeline steps
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Supported Models](#supported-models)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage Examples](#usage-examples)
+- [Architecture](#architecture)
+- [API Reference](#api-reference)
+- [Configuration](#configuration)
+- [Development](#development)
+- [Contributing](#contributing)
+- [Citation](#citation)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
-### Supported Tasks & Models
+---
 
-This framework currently supports **21 segmentation tasks** across multiple modalities (CT, MR, PET/CT):
+## Overview
 
-**Core Segmentation Models:**
-- **GTRC-Net** - Glioblastoma treatment response (PET/CT)
-- **LION** - PET lesion segmentation (FDG/PSMA)
-- **DEEP-PSMA** - PSMA PET lesion segmentation
-- **TotalSegmentator** - Whole-body CT/MR segmentation (117/50 structures)
-- **TotalSegmentator 2D** - Fast 2D projection-based segmentation
-- **DukeSeg** - Comprehensive segmentation (140 structures)
+**nnUNetSegmentator** is a comprehensive Python framework that provides a **unified interface** for multiple state-of-the-art nnUNet-based medical image segmentation models. It simplifies access to 22+ pretrained segmentation models across various modalities (CT, MR, PET/CT) without requiring deep expertise in each model's implementation.
 
-**Specialized Tasks:**
-- Lung vessels, lung nodules, liver vessels, liver lesions
-- Kidney cysts, heart chambers, cerebral bleed
-- Tissue types, body segmentation, vertebrae bodies
-- Pleural/pericardial effusion
+### Why nnUNetSegmentator?
 
-For a complete list, see [Available Tasks](#available-tasks) below or [docs/tasks/overview.md](docs/tasks/overview.md).
+| Challenge | Solution |
+|-----------|----------|
+| 🔴 **Fragmented ecosystem** - Each model has different APIs, dependencies, and workflows | ✅ **Unified API** - Single consistent interface for all models |
+| 🔴 **Complex setup** - Manual model downloads, environment configuration, path management | ✅ **Automatic management** - Models auto-downloaded, environments auto-configured |
+| 🔴 **Steep learning curve** - Need to understand each model's preprocessing, inference, postprocessing | ✅ **Pre-built pipelines** - Ready-to-use processing pipelines for each task |
+| 🔴 **Limited extensibility** - Hard to customize or combine models | ✅ **Modular design** - Composable pipeline steps, easy to extend |
+| 🔴 **No production readiness** - Research code not suitable for clinical use | ✅ **Production ready** - Comprehensive error handling, logging, testing |
 
-### Acknowledgments & Attribution
+### Target Users
 
-**IMPORTANT**: All segmentation models, pretrained weights, and algorithms integrated in this framework are developed by their respective original authors. This repository merely provides a unified interface to access these models.
+- **Researchers**: Quickly experiment with multiple segmentation models
+- **Clinicians**: Deploy segmentation models in clinical workflows
+- **Developers**: Build medical imaging applications with segmentation capabilities
+- **Data Scientists**: Integrate segmentation into ML pipelines
 
-**We gratefully acknowledge the following original works:**
+---
 
-- **GTRC-Net**: Peter MacCallum Cancer Centre - [GitHub](https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained)
-- **LION**: ENHANCE-PET Consortium - [GitHub](https://github.com/ENHANCE-PET/LION) | DOI: [10.5281/zenodo.12626789](https://doi.org/10.5281/zenodo.12626789)
-- **DEEP-PSMA**: Peter MacCallum Cancer Centre - [GitHub](https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA)
-- **TotalSegmentator**: Wasserthal et al. - [GitHub](https://github.com/wasserth/TotalSegmentator) | DOI: [10.1148/ryai.230024](https://doi.org/10.1148/ryai.230024)
-- **TotalSegmentator 2D**: RISC-MI - [GitHub](https://github.com/risc-mi/totalsegmentator2D) | Zenodo: [16985939](https://zenodo.org/records/16985939)
-- **DukeSeg**: Duke University CVIT - [GitLab](https://gitlab.oit.duke.edu/cvit-public/dukeseg_public.git) | arXiv: [2405.11133](https://arxiv.org/abs/2405.11133)
+## Key Features
 
-**If you use any of these models in your research, please cite the original publications as listed above.** This framework is provided as a convenience tool and does not claim ownership of any underlying models or algorithms.
+### 🎯 Core Capabilities
 
-## Features
+- **22+ Segmentation Models**: GTRC-Net, LION, DEEP-PSMA, TotalSegmentator, DukeSeg, MRSegmentator, and more
+- **Multi-Modality Support**: CT, MR (T1, T2, Dixon), PET, PET/CT, SPECT/CT
+- **Flexible Pipelines**: Composable preprocessing, inference, and postprocessing steps
+- **Multi-Format I/O**: NIfTI, DICOM, MHA, NRRD support
+- **Batch Processing**: Parallel processing with threading or multiprocessing
+- **Production Ready**: Comprehensive error handling, logging, and testing
 
-- ✅ **Unified API**: Single interface for multiple segmentation tasks
-- ✅ **Flexible Pipelines**: Composable preprocessing, inference, and postprocessing steps
-- ✅ **Multi-format Support**: NIfTI and DICOM I/O
-- ✅ **Batch Processing**: Parallel processing with threading or multiprocessing
-- ✅ **Task Registry**: Easy registration and discovery of segmentation tasks
-- ✅ **CLI Interface**: Command-line tools for easy usage
-- ✅ **nnUNet Integration**: Seamless integration with nnUNetv2
-- ✅ **Automatic Model Management**: Models are automatically downloaded and stored
-- ✅ **Type Safety**: Full type hints for better IDE support
-- ✅ **Production Ready**: Comprehensive error handling and logging
+### 🛠️ Developer Experience
+
+- **Clean API**: Intuitive Python API with full type hints
+- **CLI Tools**: Command-line interface for quick usage
+- **Auto-Discovery**: Automatic task and model registration
+- **Extensible**: Easy to add custom tasks, models, and pipeline steps
+- **Well-Documented**: Comprehensive documentation with examples
+- **Type-Safe**: Full type annotations for better IDE support
+
+### 📦 Package Quality
+
+- **Modern Packaging**: PEP 517/518 compliant with `pyproject.toml`
+- **Dependency Management**: Minimal core dependencies, optional feature groups
+- **Code Quality**: Black, isort, mypy, flake8 configured
+- **Test Coverage**: Comprehensive test suite with pytest
+- **CI/CD Ready**: Pre-commit hooks and continuous integration setup
+
+---
+
+## Supported Models
+
+### Core Segmentation Models
+
+| Model | Modality | Structures | Resolution | Citation |
+|-------|----------|------------|------------|----------|
+| **GTRC-Net** | PET/CT | Tumor burden (PSMA, FDG, LuPSMA) | 1.5mm | [DOI](https://doi.org/10.1148/ryai.240777) |
+| **LION** | PET | Lesions (FDG, PSMA) | 1.0mm | [DOI](https://doi.org/10.5281/zenodo.12626789) |
+| **DEEP-PSMA** | PET | PSMA lesions | 2.0mm | [GitHub](https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA) |
+| **TotalSegmentator** | CT | 117 structures | 1.5mm | [DOI](https://doi.org/10.1148/ryai.230024) |
+| **TotalSegmentator MR** | MR | 50 structures | 1.5mm | [DOI](https://doi.org/10.1148/ryai.230024) |
+| **MRSegmentator** | MR/CT | 40 structures | 1.5mm | [DOI](https://doi.org/10.1148/ryai.240777) |
+| **DukeSeg** | CT | 140 structures | 1.5mm | [arXiv](https://arxiv.org/abs/2405.11133) |
+| **TotalSegmentator 2D** | CT | 117 structures | Multi-scale | [Zenodo](https://zenodo.org/records/16985939) |
+
+### Specialized Tasks
+
+- **Lung**: Vessels, nodules, airways
+- **Liver**: Vessels, lesions, segments
+- **Cardiac**: Heart chambers, cardiac structures
+- **Abdominal**: Kidney cysts, tissue types
+- **Neuro**: Cerebral bleed, brain structures
+- **Musculoskeletal**: Vertebrae, body composition
+- **Other**: Body segmentation, pleural effusion
+
+**Total: 22 segmentation tasks** across multiple anatomical regions and modalities.
+
+See [docs/tasks/overview.md](docs/tasks/overview.md) for complete details.
+
+---
 
 ## Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/devhliu/nnunetsegmentator.git
-cd nnunetsegmentator
-
-# Install in development mode (recommended)
-pip install -e ".[all]"
-
-# Or install with specific features
-pip install -e ".[dev]"      # Development dependencies
-pip install -e ".[docs]"     # Documentation dependencies
-```
-
 ### Prerequisites
 
-- Python >= 3.8
+- Python 3.8 or higher
 - pip or conda
 - Git and Git LFS (for some models)
 
-### Download Pretrained Models
-
-Before using the segmentation tasks, you need to download the pretrained model weights:
+### Quick Install
 
 ```bash
-# Install download dependencies
-pip install requests tqdm
+# Install from PyPI (recommended)
+pip install nnunetsegmentator
 
-# For GTRC-Net and DEEP-PSMA, install Git LFS
-# Ubuntu/Debian:
-sudo apt-get install git-lfs
-git lfs install
-
-# macOS:
-brew install git-lfs
-git lfs install
-
-# Windows:
-# Download from https://git-lfs.github.com/
-
-# Download models
-cd scripts
-python download_models.py --list  # List available models
-python download_models.py --task all --output-dir ~/.nnunetsegmentator/models
+# Or install from source
+git clone https://github.com/devhliu/nnunetsegmentator.git
+cd nnunetsegmentator
+pip install -e ".[all]"
 ```
 
-### Install Local Model Files (archive or directory)
-
-You can install task model files from local paths (unzipped directory or archive).
-Identifiers must use canonical format: Dataset<数字>_<model_name>.
+### Installation Options
 
 ```bash
-nnunetsegmentator install-models \
-  --task total \
-  --model Dataset291_total_organs=/local/total_organs.zip \
-  --model Dataset292_total_vertebrae=/local/total_vertebrae/
+# Minimal installation (core functionality only)
+pip install nnunetsegmentator
+
+# With nnUNet support
+pip install nnunetsegmentator[nnunet]
+
+# With visualization tools
+pip install nnunetsegmentator[visualization]
+
+# With development tools
+pip install nnunetsegmentator[dev]
+
+# Complete installation (all features)
+pip install nnunetsegmentator[all]
 ```
 
-### Migrate Existing nnUNet Workspace Results
+### Model Setup
 
-If you have models under `~/.nnunetsegmentator/nnunet_workspace/results`,
-convert them into canonical model storage:
+Models are automatically downloaded on first use. To pre-download:
 
 ```bash
-python scripts/migrate_workspace_models.py --dry-run
-python scripts/migrate_workspace_models.py
+# List available models
+nnunetsegmentator list-models
+
+# Download specific model
+nnunetsegmentator download-model --task gtrc
+
+# Download all models
+nnunetsegmentator download-model --task all
 ```
 
-**Model Sources:**
-- **GTRC-Net**: [GitHub (Git LFS)](https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained)
-- **LION**: AWS S3 (auto-downloaded)
-- **DEEP-PSMA**: [GitHub (Git LFS)](https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA)
+For detailed installation instructions, see [docs/getting-started/installation.md](docs/getting-started/installation.md).
 
-For detailed download instructions, see [scripts/README.md](scripts/README.md).
+---
 
 ## Quick Start
 
 ### Python API
 
 ```python
-from nnunetsegmentator import SegmentationOrchestrator, Config
+from nnunetsegmentator import SegmentationOrchestrator
 
 # Initialize with a task
-orchestrator = SegmentationOrchestrator(
-    task_name='gtrc',
-    config=Config(use_gpu=True, num_workers=4)
-)
+orchestrator = SegmentationOrchestrator(task_name='total')
 
-# Segment single image
+# Segment an image
 result = orchestrator.segment(
-    input_data='path/to/image.nii.gz',
-    output_path='path/to/output.nii.gz',
-    return_labels=True,
-    compute_metrics=True
+    input_data='patient_ct.nii.gz',
+    output_path='segmentation.nii.gz'
 )
 
 # Access results
-print(f"Segmentation shape: {result.segmentation.GetSize()}")
-print(f"Labels: {list(result.labels.keys())}")
+print(f"Segmentation shape: {result.segmentation.shape}")
+print(f"Number of labels: {len(result.labels)}")
 
-if result.metrics:
-    print(f"Volume: {result.metrics['volume_mm3']:.2f} mm³")
-
-# Process individual labels
-for label_name, label_image in result.labels.items():
-    label_array = result.get_label_array(label_name)
-    volume = np.sum(label_array > 0)
-    print(f"{label_name}: {volume} voxels")
+# Access individual structures
+liver_mask = result.get_label_array('liver')
+kidney_left_mask = result.get_label_array('kidney_left')
 ```
 
 ### Multi-Modal Segmentation (PET/CT)
@@ -185,38 +210,70 @@ from nnunetsegmentator import SegmentationOrchestrator
 
 orchestrator = SegmentationOrchestrator(task_name='gtrc')
 
-# Multi-modal input (PET and CT must be co-registered)
+# Segment with co-registered PET and CT
 result = orchestrator.segment(
     input_data={
-        'pet': 'path/to/pet.nii.gz',
-        'ct': 'path/to/ct.nii.gz'
+        'pet': 'pet_image.nii.gz',
+        'ct': 'ct_image.nii.gz'
     },
-    output_path='gtrc_segmentation.nii.gz'
+    output_path='tumor_segmentation.nii.gz'
 )
 
-# Access tumor subregions
-tumor_core = result.labels['tumor_core']
-tumor_edema = result.labels['tumor_edema']
-tumor_enhancing = result.labels['tumor_enhancing']
+# Access tumor burden
+tumor_burden = result.get_label_array('tumor_burden')
 ```
 
-### CLI Interface
+### Command-Line Interface
 
 ```bash
-# Segment single image
-nnunetsegmentator segment -i input.nii.gz -o output.nii.gz -t gtrc
+# Basic segmentation
+nnunetsegmentator segment -i input.nii.gz -o output.nii.gz -t total
 
-# Batch processing with 4 workers
-nnunetsegmentator batch -i input_dir/ -o output_dir/ -t deep_psma --num-workers 4
+# Batch processing
+nnunetsegmentator batch -i input_dir/ -o output_dir/ -t total --workers 4
 
 # List available tasks
 nnunetsegmentator list-tasks
 
 # Show task information
-nnunetsegmentator info -t lion
+nnunetsegmentator info --task gtrc
 ```
 
-### Batch Processing
+---
+
+## Usage Examples
+
+### Example 1: Basic CT Segmentation
+
+```python
+from nnunetsegmentator import SegmentationOrchestrator
+
+orchestrator = SegmentationOrchestrator(task_name='total')
+result = orchestrator.segment('ct_scan.nii.gz', 'output.nii.gz')
+
+# Get volume statistics
+for label_name, label_array in result.labels.items():
+    volume_mm3 = result.compute_volume(label_name)
+    print(f"{label_name}: {volume_mm3:.2f} mm³")
+```
+
+### Example 2: Custom Pipeline
+
+```python
+from nnunetsegmentator import SegmentationOrchestrator
+from nnunetsegmentator.pipeline import Pipeline
+from nnunetsegmentator.pipeline.steps.preprocessing import ResampleStep
+
+# Create custom pipeline
+pipeline = Pipeline(name="custom")
+pipeline.add_step(ResampleStep('resample', {'spacing': (2.0, 2.0, 2.0)}))
+
+# Use custom pipeline
+orchestrator = SegmentationOrchestrator(task_name='total', pipeline=pipeline)
+result = orchestrator.segment('input.nii.gz', 'output.nii.gz')
+```
+
+### Example 3: Batch Processing
 
 ```python
 from pathlib import Path
@@ -224,281 +281,84 @@ from nnunetsegmentator import SegmentationOrchestrator
 
 orchestrator = SegmentationOrchestrator(task_name='total')
 
-# Process multiple patients
-input_files = list(Path("data/patients").glob("*.nii.gz"))
-
+# Process multiple files
+input_files = list(Path("data/").glob("*.nii.gz"))
 results = orchestrator.segment_batch(
     input_list=input_files,
     output_dir="results/",
-    num_workers=4,
-    use_multiprocessing=True,
-    progress_callback=lambda c, t, r: print(f"Progress: {c+1}/{t}")
+    num_workers=4
 )
 
-# Check results
-successful = sum(1 for r in results if r is not None)
-print(f"Successfully processed: {successful}/{len(input_files)}")
+print(f"Processed: {sum(r is not None for r in results)}/{len(input_files)}")
 ```
+
+See [examples/](examples/) directory for more examples.
+
+---
 
 ## Architecture
 
 ```
 nnunetsegmentator/
-├── src/                        # Source code
-│   └── nnunetsegmentator/      # Main package
-│       ├── core/               # Core components
-│       │   ├── orchestrator.py # Main segmentation orchestrator
-│       │   ├── registry.py     # Model and task registry
-│       │   └── config.py       # Configuration management
-│       ├── io/                 # Input/Output handling
-│       │   ├── readers.py      # NIfTI, DICOM readers
-│       │   └── writers.py      # Output writers
-│       ├── pipeline/           # Processing pipelines
-│       │   ├── base.py         # Base pipeline classes
-│       │   ├── steps/          # Pipeline steps
-│       │   │   ├── preprocessing.py
-│       │   │   ├── inference.py
-│       │   │   └── postprocessing.py
-│       │   └── builders.py     # Pipeline construction
-│       ├── tasks/              # Task definitions
-│       │   ├── gtrc.py         # GTRC-Net task
-│       │   ├── lion.py         # LION task
-│       │   └── deep_psma.py    # DEEP-PSMA task
-│       ├── cli/                # Command-line interface
-│       └── utils/              # Utility functions
-├── docs/                       # Documentation
-├── examples/                   # Example scripts
-├── scripts/                    # Utility scripts
-├── tests/                      # Test suite
-├── pyproject.toml              # Package configuration
-└── README.md                   # This file
+├── src/nnunetsegmentator/          # Main package
+│   ├── core/                       # Core components
+│   │   ├── orchestrator.py         # Main segmentation orchestrator
+│   │   ├── registry.py             # Task and model registry
+│   │   └── config.py               # Configuration management
+│   ├── io/                         # Input/Output handling
+│   │   ├── readers.py              # NIfTI, DICOM readers
+│   │   └── writers.py              # Output writers
+│   ├── pipeline/                   # Processing pipelines
+│   │   ├── base.py                 # Base pipeline classes
+│   │   └── steps/                  # Pipeline steps
+│   │       ├── preprocessing.py    # Preprocessing steps
+│   │       ├── inference.py        # Inference steps
+│   │       └── postprocessing.py   # Postprocessing steps
+│   ├── tasks/                      # Task definitions
+│   │   ├── gtrc.py                 # GTRC-Net task
+│   │   ├── lion.py                 # LION task
+│   │   ├── totalsegmentator.py     # TotalSegmentator task
+│   │   └── ...                     # Other tasks
+│   ├── cli/                        # Command-line interface
+│   └── utils/                      # Utility functions
+├── docs/                           # Documentation
+├── examples/                       # Example scripts
+├── tests/                          # Test suite
+├── scripts/                        # Utility scripts
+└── pyproject.toml                  # Package configuration
 ```
 
-## Available Tasks
+### Design Principles
 
-### Core Tasks
+1. **Modularity**: Each component is independent and replaceable
+2. **Extensibility**: Easy to add new tasks, models, and pipeline steps
+3. **Type Safety**: Full type hints for better developer experience
+4. **Separation of Concerns**: Clear separation between IO, processing, and inference
+5. **Configuration Driven**: Behavior controlled through configuration files
 
-#### GTRC-Net
-Glioblastoma Treatment Response Classification using PET/CT.
+See [docs/architecture.md](docs/architecture.md) for detailed architecture documentation.
 
-**Input**: Co-registered PET and CT images  
-**Output**: Tumor core, edema, and enhancing regions  
-**Resolution**: 1.5mm isotropic  
-**Models**: 5-fold ensemble
-
-#### LION
-Lesion Identification and Oncology Network for PET lesion segmentation.
-
-**Input**: PET images (FDG or PSMA)  
-**Output**: Liver, lung, bone lesions, and lymph nodes  
-**Resolution**: 1.0mm isotropic  
-**Models**: 5-fold ensemble
-
-#### DEEP-PSMA
-PSMA PET segmentation for prostate cancer assessment.
-
-**Input**: PSMA PET images  
-**Output**: PSMA-avid lesions, prostate, lymph nodes, bone lesions  
-**Resolution**: 2.0mm isotropic  
-**Models**: 5-fold ensemble
-
-#### TotalSegmentator
-Comprehensive whole-body CT segmentation.
-
-**Input**: CT images  
-**Output**: 117 anatomical structures  
-**Resolution**: 1.5mm isotropic  
-**Models**: Multi-stage ensemble
-
-#### TotalSegmentator 2D
-Fast 2D projection-based CT segmentation.
-
-**Input**: CT images  
-**Output**: 117 anatomical structures  
-**Resolution**: Multi-scale  
-**Speed**: < 1 second inference time
-
-#### DukeSeg
-Comprehensive anatomical structure segmentation.
-
-**Input**: CT images  
-**Output**: 140 structures  
-**Resolution**: 1.5mm isotropic  
-**Models**: Multi-stage ensemble
-
-### Specialized Tasks
-
-- **Lung Vessels**: Arteries, veins, airways, and airway walls
-- **Lung Nodules**: Nodule detection and segmentation
-- **Liver Vessels**: Vessels and tumors
-- **Liver Lesions**: Lesion segmentation
-- **Kidney Cysts**: Cyst segmentation
-- **Heart Chambers**: 7 chamber classes
-- **Cerebral Bleed**: Intracerebral hemorrhage
-- **Tissue Types**: Fat and muscle segmentation
-- **Body Segmentation**: Body regions
-- **Vertebrae Body**: Individual vertebrae (C1-L5)
-- **Pleural Effusion**: Effusion segmentation
-
-For a complete list with details, see [docs/tasks/overview.md](docs/tasks/overview.md).
-
-## Creating Custom Tasks
-
-```python
-from nnunetsegmentator.tasks.base import BaseTask
-from nnunetsegmentator.core.registry import TaskDefinition, ModelInfo
-from nnunetsegmentator.pipeline import Pipeline
-from nnunetsegmentator.pipeline.steps.preprocessing import ResampleStep
-
-class MyCustomTask(BaseTask):
-    name = "my_task"
-    description = "My custom segmentation task"
-
-    @classmethod
-    def get_definition(cls) -> TaskDefinition:
-        return TaskDefinition(
-            name=cls.name,
-            models={
-                'my_model': ModelInfo(
-                    name='my_model',
-                    task_id='Dataset999_my_model',
-                    url='https://url.to.model/model.zip',
-                    checksum='abc123',
-                    labels={'target': 1, 'background': 0},
-                    modality='CT',
-                    description=cls.description
-                )
-            },
-            pipeline_config={
-                'steps': [
-                    {'type': 'resample', 'params': {'spacing': [1.0, 1.0, 1.0]}}
-                ]
-            },
-            input_requirements={'modalities': ['CT'], 'format': 'NIfTI'},
-            output_config={'format': 'NIfTI'}
-        )
-
-    @classmethod
-    def get_default_pipeline(cls) -> Pipeline:
-        pipeline = Pipeline(name="my_task_pipeline")
-        pipeline.add_step(ResampleStep('resample', {'spacing': (1.0, 1.0, 1.0)}))
-        # Add more steps...
-        return pipeline
-
-# Task classes under nnunetsegmentator.tasks are auto-discovered and auto-registered.
-```
-
-## Pipeline Steps
-
-### Preprocessing Steps
-
-| Step | Description | Use Case |
-|------|-------------|----------|
-| `ResampleStep` | Resample to target spacing | Standardize image resolution |
-| `ClipIntensityStep` | Clip intensity values | Remove outliers |
-| `NormalizeStep` | Normalize intensities | Standardize input distribution |
-| `SUVThresholdStep` | Apply SUV threshold | PET quantification |
-| `MultiChannelStackStep` | Stack multiple modalities | Multi-modal input |
-
-### Inference Steps
-
-| Step | Description | Use Case |
-|------|-------------|----------|
-| `nnUNetInferenceStep` | Run nnUNet inference | Standard segmentation |
-| `CascadeInferenceStep` | Cascade multiple models | Multi-stage segmentation |
-| `EnsembleInferenceStep` | Ensemble model predictions | Improve accuracy |
-
-### Postprocessing Steps
-
-| Step | Description | Use Case |
-|------|-------------|----------|
-| `LargestComponentStep` | Keep largest connected component | Remove false positives |
-| `MorphologicalOpsStep` | Morphological operations | Smooth boundaries |
-| `FillHolesStep` | Fill holes in segmentation | Close gaps |
-| `RemoveSmallObjectsStep` | Remove small objects | Filter noise |
-| `ExpandContractStep` | Expand/contract boundaries | Adjust segmentation |
-
-## Configuration
-
-Create a configuration file `config.yaml`:
-
-```yaml
-data_dir: ./data
-output_dir: ./output
-model_dir: ~/.nnunetsegmentator/models  # Default location
-num_workers: 4
-use_gpu: true
-gpu_id: 0
-batch_size: 1
-
-nnunet_raw: /path/to/nnunet_workspace/raw
-nnunet_preprocessed: /path/to/nnunet_workspace/preprocessed
-nnunet_results: /path/to/nnunet_workspace/results
-
-log_level: INFO
-log_file: ./logs/segmentation.log
-
-# Custom settings
-custom:
-  preprocessing:
-    resample_spacing: [1.0, 1.0, 1.0]
-  postprocessing:
-    keep_top_n: 3
-```
-
-Load and use:
-
-```python
-from nnunetsegmentator import Config
-
-config = Config.from_file('config.yaml')
-config.setup_nnunet_environment()
-
-orchestrator = SegmentationOrchestrator(task_name='total', config=config)
-```
-
-## nnUNet Environment Setup
-
-The framework requires proper nnUNet environment setup:
-
-```bash
-# Set environment variables
-export nnUNet_raw=/path/to/nnunet_workspace/raw
-export nnUNet_preprocessed=/path/to/nnunet_workspace/preprocessed
-export nnUNet_results=/path/to/nnunet_workspace/results
-```
-
-Or configure in Python:
-
-```python
-from nnunetsegmentator import Config
-
-config = Config(
-    nnunet_raw='/path/to/nnunet_workspace/raw',
-    nnunet_preprocessed='/path/to/nnunet_workspace/preprocessed',
-    nnunet_results='/path/to/nnunet_workspace/results'
-)
-config.setup_nnunet_environment()
-```
+---
 
 ## API Reference
 
-### SegmentationOrchestrator
+### Core Classes
+
+#### `SegmentationOrchestrator`
 
 Main class for managing segmentation tasks.
 
 ```python
-from nnunetsegmentator import SegmentationOrchestrator, Config
+from nnunetsegmentator import SegmentationOrchestrator
 
-# Initialize
 orchestrator = SegmentationOrchestrator(
-    task_name='gtrc',          # Task name
-    config=Config(),           # Configuration
-    model_path=None,           # Optional model path override
-    pipeline=None              # Optional custom pipeline
+    task_name='total',           # Task name
+    config=None,                 # Optional configuration
+    model_path=None,             # Optional model path override
+    pipeline=None                # Optional custom pipeline
 )
 
-# Single subject segmentation
+# Single image segmentation
 result = orchestrator.segment(
     input_data='image.nii.gz',
     output_path='output.nii.gz',
@@ -510,170 +370,243 @@ result = orchestrator.segment(
 results = orchestrator.segment_batch(
     input_list=['img1.nii.gz', 'img2.nii.gz'],
     output_dir='./output',
-    num_workers=4,
-    use_multiprocessing=True,
-    progress_callback=None
+    num_workers=4
 )
 ```
 
-### SegmentationResult
+#### `SegmentationResult`
 
 Container for segmentation results.
 
 ```python
-result = orchestrator.segment("image.nii.gz", "output.nii.gz")
+result = orchestrator.segment('image.nii.gz', 'output.nii.gz')
 
-# Access segmentation
-segmentation = result.segmentation  # nnunetsegmentator.image.Image
-segmentation_array = result.get_array()  # Numpy array
+# Access segmentation array
+segmentation = result.get_array()  # numpy.ndarray
 
 # Access individual labels
 for label_name, label_image in result.labels.items():
     label_array = result.get_label_array(label_name)
 
-# Access metrics
-if result.metrics:
-    print(f"Volume: {result.metrics['volume_mm3']:.2f} mm³")
+# Compute metrics
+volume = result.compute_volume('liver')  # in mm³
 
 # Access metadata
-print(f"Spacing: {result.metadata['spacing']}")
-print(f"Origin: {result.metadata['origin']}")
+print(result.metadata['spacing'])
+print(result.metadata['origin'])
 ```
 
-### TaskRegistry
+#### `Config`
 
-Central registry for tasks and models.
+Configuration management.
 
 ```python
-from nnunetsegmentator import TaskRegistry
+from nnunetsegmentator import Config
 
-# List tasks
-tasks = TaskRegistry.list_tasks()
-for name, description in tasks.items():
-    print(f"{name}: {description}")
+# Create from file
+config = Config.from_file('config.yaml')
 
-# Get task
-task = TaskRegistry.get_task('gtrc')
-print(f"Task: {task.name}")
-print(f"Models: {list(task.models.keys())}")
+# Create programmatically
+config = Config(
+    use_gpu=True,
+    num_workers=4,
+    model_dir='~/.nnunetsegmentator/models'
+)
 
-# Register model path
-TaskRegistry.register_model_path('model_name', '/path/to/model')
+# Setup nnUNet environment
+config.setup_nnunet_environment()
 ```
 
-## Examples
+See [docs/reference/api-reference.md](docs/reference/api-reference.md) for complete API documentation.
 
-See the `examples/` directory for detailed usage examples:
+---
 
-| Example | Description | Command |
-|---------|-------------|---------|
-| `01_basic_segmentation.py` | Basic whole-body CT segmentation | `python examples/01_basic_segmentation.py` |
-| `02_multimodal_segmentation.py` | Multi-modal PET/CT segmentation | `python examples/02_multimodal_segmentation.py` |
-| `03_custom_pipeline.py` | Custom pipeline construction | `python examples/03_custom_pipeline.py` |
-| `04_dicom_segmentation.py` | DICOM I/O and export | `python examples/04_dicom_segmentation.py` |
+## Configuration
 
-For more examples, see [examples/README.md](examples/README.md).
+### Configuration File
 
-## Documentation
+Create `config.yaml`:
 
-Comprehensive documentation is available in the `docs/` directory:
+```yaml
+# Paths
+data_dir: ./data
+output_dir: ./output
+model_dir: ~/.nnunetsegmentator/models
 
-| Document | Description |
-|----------|-------------|
-| [Installation & Usage](docs/getting-started/installation.md) | Installation guide and usage examples |
-| [API Reference](docs/reference/api-reference.md) | Complete API documentation |
-| [Tasks](docs/tasks/overview.md) | Available segmentation tasks |
-| [Architecture](docs/architecture.md) | Framework architecture and design |
-| [Contributing](CONTRIBUTING.md) | Contribution guidelines |
+# Processing
+num_workers: 4
+use_gpu: true
+gpu_id: 0
+batch_size: 1
 
-## Testing
+# nnUNet environment
+nnunet_raw: /path/to/nnunet_workspace/raw
+nnunet_preprocessed: /path/to/nnunet_workspace/preprocessed
+nnunet_results: /path/to/nnunet_workspace/results
 
-```bash
-# Run all tests
-pytest
+# Logging
+log_level: INFO
+log_file: ./logs/segmentation.log
 
-# Run with coverage
-pytest --cov=src/nnunetsegmentator
-
-# Run specific test file
-pytest tests/unit/core/test_orchestrator.py
-
-# Run with verbose output
-pytest -v
-
-# Type checking
-mypy src/nnunetsegmentator
-
-# Linting
-flake8 src/nnunetsegmentator
+# Custom settings
+custom:
+  preprocessing:
+    resample_spacing: [1.0, 1.0, 1.0]
+  postprocessing:
+    keep_top_n: 3
 ```
 
-## Contributing
-
-Contributions are welcome! Please read the [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
-
-### How to Contribute
-
-1. **Report bugs** - Open an issue with detailed reproduction steps
-2. **Suggest features** - Open an issue with clear feature description
-3. **Submit code** - Follow the pull request guidelines
-4. **Improve docs** - Help us improve documentation
-5. **Write tests** - Add tests for new functionality
-
-### Development Setup
+### Environment Variables
 
 ```bash
-# Fork the repository
-# Clone your fork
-git clone https://github.com/YOUR_USERNAME/nnunetsegmentator.git
+# Model storage location
+export NNUNETSEGMENTATOR_MODEL_ROOTPATH=/custom/model/path
+
+# nnUNet workspace
+export NNUNETSEGMENTATOR_NNUNET_WORKSPACE=/path/to/workspace
+
+# Or set nnUNet paths directly
+export nnUNet_raw=/path/to/raw
+export nnUNet_preprocessed=/path/to/preprocessed
+export nnUNet_results=/path/to/results
+```
+
+See [docs/guide/configuration.md](docs/guide/configuration.md) for detailed configuration guide.
+
+---
+
+## Development
+
+### Setup Development Environment
+
+```bash
+# Clone repository
+git clone https://github.com/devhliu/nnunetsegmentator.git
 cd nnunetsegmentator
 
 # Install in development mode
 pip install -e ".[dev]"
 
-# Set up pre-commit hooks
+# Install pre-commit hooks
 pre-commit install
 
 # Run tests
 pytest
+
+# Run tests with coverage
+pytest --cov=src/nnunetsegmentator --cov-report=html
+
+# Type checking
+mypy src/nnunetsegmentator
+
+# Code formatting
+black src/nnunetsegmentator
+isort src/nnunetsegmentator
+
+# Linting
+flake8 src/nnunetsegmentator
 ```
+
+### Project Structure
+
+- **Source Code**: `src/nnunetsegmentator/`
+- **Tests**: `tests/`
+- **Documentation**: `docs/`
+- **Examples**: `examples/`
+- **Scripts**: `scripts/`
+
+### Code Quality Tools
+
+- **Black**: Code formatting
+- **isort**: Import sorting
+- **mypy**: Static type checking
+- **flake8**: Linting
+- **pytest**: Testing
+- **pre-commit**: Git hooks
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Ways to Contribute
+
+- 🐛 **Report bugs**: Open an issue with detailed reproduction steps
+- 💡 **Suggest features**: Open an issue with clear feature description
+- 📝 **Improve documentation**: Fix typos, add examples, clarify explanations
+- 🔧 **Submit code**: Fix bugs, add features, improve performance
+- ✅ **Write tests**: Add tests for new functionality or existing code
+
+### Development Workflow
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`pytest`)
+5. Commit changes (`git commit -m 'Add amazing feature'`)
+6. Push to branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+---
+
+## Citation
+
+If you use nnUNetSegmentator in your research, please cite:
+
+```bibtex
+@software{nnunetsegmentator2024,
+  author = {devhliu},
+  title = {nnUNetSegmentator: A Unified Framework for Medical Image Segmentation},
+  year = {2024},
+  url = {https://github.com/devhliu/nnunetsegmentator},
+  version = {0.2.0}
+}
+```
+
+**Important**: Please also cite the original papers for the specific models you use. See [Acknowledgments](#acknowledgments) for citation information.
+
+---
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Citation
+**Note**: The underlying segmentation models have their own licenses. Please respect the original authors' licensing terms when using specific models.
 
-If you use this framework in your research, please cite:
+---
 
-```bibtex
-@software{nnunetsegmentator2024,
-  title={nnunetsegmentator: A unified framework for medical image segmentation},
-  author={Your Name},
-  year={2024},
-  url={https://github.com/devhliu/nnunetsegmentator}
-}
-```
+## Acknowledgments
+
+This framework integrates models from the following research groups. **We gratefully acknowledge their work**:
+
+| Model | Authors | Citation | License |
+|-------|---------|----------|---------|
+| **GTRC-Net** | Peter MacCallum Cancer Centre | [DOI](https://doi.org/10.1148/ryai.240777) | Apache-2.0 |
+| **LION** | ENHANCE-PET Consortium | [DOI](https://doi.org/10.5281/zenodo.12626789) | Apache-2.0 |
+| **DEEP-PSMA** | Peter MacCallum Cancer Centre | [GitHub](https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA) | Apache-2.0 |
+| **TotalSegmentator** | Wasserthal et al. | [DOI](https://doi.org/10.1148/ryai.230024) | Apache-2.0 |
+| **MRSegmentator** | Häntze et al. | [DOI](https://doi.org/10.1148/ryai.240777) | Apache-2.0 |
+| **DukeSeg** | Duke University CVIT | [arXiv](https://arxiv.org/abs/2405.11133) | MIT |
+| **TotalSegmentator 2D** | RISC-MI | [Zenodo](https://zenodo.org/records/16985939) | Apache-2.0 |
+
+**If you use any of these models, please cite the original publications.**
+
+---
 
 ## Support
 
 - 📖 **Documentation**: [docs/](docs/)
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/devhliu/nnunetsegmentator/issues)
 - 💡 **Feature Requests**: [GitHub Discussions](https://github.com/devhliu/nnunetsegmentator/discussions)
-- 💬 **Community**: Join our [Discord server](https://discord.gg/your-invite-link)
-
-## Acknowledgments
-
-This framework integrates models from the following institutions and research groups:
-
-- Peter MacCallum Cancer Centre
-- ENHANCE-PET Consortium
-- Duke University CVIT
-- Wasserthal et al. (TotalSegmentator)
-- RISC-MI (TotalSegmentator 2D)
-
-We thank all the original authors for making their models available to the research community.
+- 💬 **Questions**: [GitHub Discussions](https://github.com/devhliu/nnunetsegmentator/discussions)
 
 ---
 
-**Happy Segmenting! 🎉**
+<div align="center">
+
+**Made with ❤️ by devhliu**
+
+[⬆ Back to Top](#nnunetsegmentator)
+
+</div>

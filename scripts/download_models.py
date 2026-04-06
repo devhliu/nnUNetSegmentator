@@ -78,23 +78,23 @@ class ModelInfo:
 AVAILABLE_MODELS: Dict[str, ModelInfo] = {
     'gtrc': ModelInfo(
         name='gtrc',
-        task_id='Dataset881_gtrc_psma',
+        task_id='Dataset881_PSMA_PET',
         url='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
         checksum=None,  # Git LFS handles integrity
         filename='gtrc.zip',
-        description='GTRC-Net: Glioblastoma treatment response segmentation (PET/CT)',
+        description='GTRC-Net: Total tumor burden segmentation (PET/CT, SPECT/CT)',
         method=DownloadMethod.GIT_LFS,
         github_repo='https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git',
         target_subdir='data/nnUNet_data/results',
         variants={
-            'psma': 'Dataset881_gtrc_psma',
-            'fdg': 'Dataset882_gtrc_fdg',
-            'lupsma': 'Dataset883_gtrc_lupsma',
+            'psma': 'Dataset881_PSMA_PET',
+            'fdg': 'Dataset882_FDG_PET',
+            'lupsma': 'Dataset883_LUPSMA_SPECT',
         },
         variant_task_ids={
-            'psma': 'Dataset881_gtrc_psma',
-            'fdg': 'Dataset882_gtrc_fdg',
-            'lupsma': 'Dataset883_gtrc_lupsma',
+            'psma': 'Dataset881_PSMA_PET',
+            'fdg': 'Dataset882_FDG_PET',
+            'lupsma': 'Dataset883_LUPSMA_SPECT',
         },
     ),
     'lion': ModelInfo(
@@ -192,6 +192,15 @@ AVAILABLE_MODELS: Dict[str, ModelInfo] = {
             'model2': 'Dataset1001_dukeseg_model2',
             'model3': 'Dataset1002_dukeseg_model3',
         },
+    ),
+    'mrsegmentator': ModelInfo(
+        name='mrsegmentator',
+        task_id='Dataset1500_mrsegmentator',
+        url='https://github.com/hhaentze/MRSegmentator',
+        checksum=None,
+        filename='mrsegmentator.zip',
+        description='MRSegmentator: Multi-modality segmentation of 40 classes in MRI and CT',
+        method=DownloadMethod.PIP,
     ),
 }
 
