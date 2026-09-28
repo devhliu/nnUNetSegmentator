@@ -19,40 +19,45 @@ logger = logging.getLogger(__name__)
 class nnUNetInferenceStep(PipelineStep):
     """
     Execute nnUNet inference.
-    
+
     This step runs nnUNet inference on the prepared input data.
     It uses the nnUNetv2 Python API.
+
+    By default the image is resampled to the model's training spacing with
+    B-spline interpolation, the prediction is restored to the input grid with
+    nearest-neighbour resampling, and the array handed to nnUNetv2 uses
+    SimpleITK ordering (z, y, x) with matching spacing. The context array/image
+    are left untouched, so downstream steps always operate on the entry grid.
+
+    Config options:
+        model_path: Path to the trained model
+        folds: List of folds to use (default: [0])
+        tile_step_size: Tile step size for sliding window (default: 0.5)
+        use_gaussian: Use Gaussian importance weighting (default: True)
+        use_mirroring: Use test-time augmentation (default: True)
+        device: Device to use (default: 'cuda')
+        faithful_resampling: Resample to the model spacing and restore the
+            prediction to the input grid (default: True)
     """
-    
+
     def __init__(self, name: str, config: dict = None):
         super().__init__(name, config)
         self._predictor = None
         self._initialized = False
-    
+
     def execute(self, context: PipelineContext) -> PipelineContext:
         """
         Execute nnUNet inference.
-        
-        Config options:
-            model_path: Path to the trained model
-            folds: List of folds to use (default: [0])
-            tile_step_size: Tile step size for sliding window (default: 0.5)
-            use_gaussian: Use Gaussian importance weighting (default: True)
-            use_mirroring: Use test-time augmentation (default: True)
-            device: Device to use (default: 'cuda')
         """
         # Check for accelerator in context (Herd Mode)
         device = context.metadata.get('accelerator')
         if not device:
             device = self.config.get('device', 'cuda')
-            
+
         self._init_predictor(device=device)
-        
+
         input_array = context.input_array
-        spacing = context.metadata.get('current_spacing', (1.5, 1.5, 1.5))
-        
-        logger.debug(f"Running inference with spacing {spacing} on {device}")
-        prediction = self._run_api_inference(input_array, spacing)
+        prediction = self._run_faithful_inference(context, input_array)
 
         save_probabilities = self.config.get('save_or_return_probabilities', False)
         if save_probabilities:
@@ -142,7 +147,184 @@ class nnUNetInferenceStep(PipelineStep):
             return TaskRegistry.get_model_path(model_name)
 
         raise ValueError("Either 'model_path' or 'model_name' must be specified in config")
-    
+
+    def _get_model_spacing_zyx(self, source_spacing_zyx):
+        """
+        Model voxel spacing in (z, y, x) order as fed to nnUNetv2.
+
+        nnUNetv2 plans store the spacing in transposed axis order; the raw
+        (SimpleITK) order is recovered via ``transpose_forward``. Returns
+        None when unavailable (e.g. mocked predictors in tests).
+        """
+        configuration = getattr(self._predictor, 'configuration_manager', None)
+        spacing = getattr(configuration, 'spacing', None)
+        if not spacing:
+            return None
+
+        plans = getattr(self._predictor, 'plans_manager', None)
+        # transpose_forward is defined over the 3 raw axes, even for 2D
+        # configurations whose spacing only has the two in-plane entries.
+        transpose = list(getattr(plans, 'transpose_forward', None) or [])
+        if sorted(transpose) != list(range(3)):
+            transpose = list(range(3))
+
+        if len(spacing) == 3:
+            raw_spacing = [None] * 3
+            for transposed_axis, raw_axis in enumerate(transpose):
+                raw_spacing[raw_axis] = float(spacing[transposed_axis])
+            return tuple(raw_spacing)
+
+        if len(spacing) == 2:
+            # 2D configuration: nnUNetv2 keeps the input slice spacing
+            # (target_spacing = [original_spacing[0]] + configuration
+            # spacing); network axis 0 is the slice axis.
+            slice_axis = transpose[0]
+            raw_spacing = [None] * 3
+            raw_spacing[slice_axis] = float(source_spacing_zyx[slice_axis])
+            remaining = [axis for axis in range(3) if axis != slice_axis]
+            raw_spacing[remaining[0]] = float(spacing[0])
+            raw_spacing[remaining[1]] = float(spacing[1])
+            return tuple(raw_spacing)
+
+        return None
+
+    def _resample_array(self, data: np.ndarray, output_shape, order: int) -> np.ndarray:
+        """
+        Resample `data` (3D or 4D with leading channels) onto a new voxel grid
+        anchored at the first voxel.
+
+        This matches SimpleITK.Resample with an identity transform: output
+        voxel i maps to continuous input index i * input_size / output_size
+        per axis.
+        """
+        from scipy import ndimage
+
+        output_shape = tuple(int(v) for v in output_shape)
+        spatial_shape = data.shape[-3:]
+        coordinates = [
+            np.arange(output_shape[axis]) * (spatial_shape[axis] / output_shape[axis])
+            for axis in range(3)
+        ]
+        mesh = np.meshgrid(*coordinates, indexing='ij')
+        coords = np.stack([axis_grid.ravel() for axis_grid in mesh])
+
+        if data.ndim == 4:
+            channels = []
+            for channel in range(data.shape[0]):
+                resampled = ndimage.map_coordinates(
+                    data[channel].astype(np.float32), coords,
+                    order=order, mode='nearest', prefilter=order > 0,
+                )
+                channels.append(resampled)
+            return np.stack(channels).reshape(data.shape[0], *output_shape)
+
+        resampled = ndimage.map_coordinates(
+            data.astype(np.float32), coords,
+            order=order, mode='nearest', prefilter=order > 0,
+        )
+        return resampled.reshape(output_shape)
+
+    def _run_faithful_inference(self, context: PipelineContext, input_array: np.ndarray):
+        """
+        Run inference with model-spacing resampling:
+
+        1. B-spline resample the image to the model's training spacing.
+        2. Feed nnUNetv2 a SimpleITK-ordered (z, y, x) array with matching
+           spacing (the framework keeps arrays in (x, y, z) order).
+        3. Restore the prediction to the step-entry grid with
+           nearest-neighbour resampling.
+
+        The context array/image are not modified.
+        """
+        if not self.config.get('faithful_resampling', True):
+            spacing = context.metadata.get('current_spacing', (1.5, 1.5, 1.5))
+            return self._run_api_inference(input_array, spacing)
+
+        source_image = context.input_image
+        spatial_shape = input_array.shape[-3:]
+
+        if tuple(source_image.GetSize()) == tuple(spatial_shape):
+            source_size_xyz = tuple(int(v) for v in source_image.GetSize())
+            source_spacing_xyz = tuple(float(v) for v in source_image.GetSpacing())
+        else:
+            # Array was modified upstream (e.g. z-cropped) without updating
+            # the image geometry; derive the grid from the array itself.
+            source_size_xyz = tuple(int(v) for v in spatial_shape)
+            source_spacing_xyz = tuple(
+                float(v) for v in context.metadata.get(
+                    'current_spacing', source_image.GetSpacing())
+            )
+            logger.warning(
+                "%s: input image geometry out of sync with array; using array "
+                "shape with spacing %s", self.name, source_spacing_xyz,
+            )
+
+        source_spacing_zyx = tuple(reversed(source_spacing_xyz))
+        model_spacing_zyx = self._get_model_spacing_zyx(source_spacing_zyx)
+        if model_spacing_zyx is None:
+            spacing = context.metadata.get('current_spacing', (1.5, 1.5, 1.5))
+            return self._run_api_inference(input_array, spacing)
+
+        model_spacing_xyz = tuple(reversed(model_spacing_zyx))
+        needs_resample = any(
+            abs(source_spacing_xyz[i] - model_spacing_xyz[i]) > 1e-6
+            for i in range(3)
+        )
+
+        # Framework arrays are (x, y, z); nnUNetv2 expects SimpleITK-ordered
+        # (z, y, x) arrays.
+        if input_array.ndim == 4:
+            data_zyx = input_array.transpose(0, 3, 2, 1)
+        else:
+            data_zyx = input_array.transpose(2, 1, 0)
+
+        if needs_resample:
+            model_size_zyx = [
+                int(round(
+                    source_size_xyz[i] * source_spacing_xyz[i] / model_spacing_xyz[i]
+                ))
+                for i in range(3)
+            ]
+            model_size_zyx = tuple(reversed(model_size_zyx))
+            logger.debug(
+                "%s: resampling %s to model spacing %s (size %s)",
+                self.name, source_spacing_zyx, model_spacing_zyx, model_size_zyx,
+            )
+            # B-spline interpolation, matching moosez ImageResampler
+            # (constants.INTERPOLATION = 'bspline').
+            data_zyx = self._resample_array(data_zyx, model_size_zyx, order=3)
+
+        logger.debug("Running inference with spacing %s", model_spacing_zyx)
+        prediction = self._run_api_inference(data_zyx, model_spacing_zyx)
+
+        segmentation, probabilities = prediction, None
+        if isinstance(prediction, tuple) and len(prediction) >= 2:
+            segmentation, probabilities = prediction
+
+        # nnUNetv2 returns (z, y, x) arrays; restore the framework (x, y, z)
+        # order and the step-entry grid.
+        segmentation = np.asarray(segmentation)
+        if segmentation.ndim == 4:
+            segmentation_xyz = segmentation.transpose(0, 3, 2, 1)
+        else:
+            segmentation_xyz = segmentation.transpose(2, 1, 0)
+        if needs_resample:
+            # Nearest-neighbour back to the source grid, matching moosez
+            # ImageResampler.resample_segmentation.
+            segmentation_xyz = self._resample_array(
+                segmentation_xyz, source_size_xyz, order=0,
+            ).astype(segmentation.dtype)
+
+        if probabilities is not None:
+            probabilities_xyz = np.asarray(probabilities).transpose(0, 3, 2, 1)
+            if needs_resample:
+                probabilities_xyz = self._resample_array(
+                    probabilities_xyz.astype(np.float32), source_size_xyz, order=1,
+                )
+            return segmentation_xyz, probabilities_xyz
+
+        return segmentation_xyz
+
     def _run_api_inference(self, input_array: np.ndarray, spacing: tuple) -> np.ndarray:
         """
         Run inference using nnUNetv2 Python API.
@@ -176,6 +358,127 @@ class nnUNetInferenceStep(PipelineStep):
         )
         
         return prediction
+
+
+class CropFOVStep(PipelineStep):
+    """
+    Crop the field of view along the z axis using an upstream model.
+
+    A crop model is inferred on the full image, a binary mask over the
+    configured intensity range is computed, and the input array is cropped
+    along z (full x/y extent) so the downstream target model only processes
+    the relevant z band.
+
+    Config options:
+        crop_model_name: Registered model used to produce the crop mask.
+        fov_intensities: [lower, upper] inclusive label range for the mask.
+        folds: Folds for the crop model inference (default: [0])
+        use_mirroring: TTA for the crop model (default: False)
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        crop_model_name = self.config.get('crop_model_name')
+        if not crop_model_name:
+            raise ValueError("CropFOVStep requires 'crop_model_name' in config")
+
+        fov_intensities = self.config.get('fov_intensities', [1, 255])
+        fov_low, fov_high = int(fov_intensities[0]), int(fov_intensities[1])
+
+        crop_config = {
+            k: v for k, v in self.config.items()
+            if k not in {'crop_model_name', 'fov_intensities'}
+        }
+        crop_config['model_name'] = crop_model_name
+
+        crop_step = nnUNetInferenceStep(f"crop_fov_{crop_model_name}", crop_config)
+        context = crop_step.execute(context)
+        crop_prediction = context.intermediate_results['raw_prediction'].copy()
+
+        mask = (crop_prediction >= fov_low) & (crop_prediction <= fov_high)
+        # Arrays are (x, y, z); reduce x/y to find the slice (z) extent.
+        z_indices = np.where(mask.any(axis=(0, 1)))[0]
+        if z_indices.size == 0:
+            logger.warning("CropFOVStep: crop mask is empty; keeping full field of view")
+            return context
+
+        z_start = int(z_indices[0])
+        z_end = int(z_indices[-1]) + 1
+
+        context.intermediate_results['fov_crop'] = {
+            'z_start': z_start,
+            'z_end': z_end,
+            'crop_prediction': crop_prediction,
+        }
+        context.set_array(context.input_array[:, :, z_start:z_end])
+        logger.info(
+            "CropFOVStep: cropped z range [%d, %d) of %d slices (model: %s)",
+            z_start, z_end, context.input_array.shape[2], crop_model_name,
+        )
+        return context
+
+
+class FOVRestrictStep(PipelineStep):
+    """
+    Restrict the target prediction to the cropped field of view.
+
+    This replicates MOOSE's restrict_fov workflow role: after inference on the
+    cropped image, the prediction is pasted back into the full-frame grid and
+    zeroed outside the z band derived from the crop model's mask (optionally
+    the largest connected component of a specific crop label only).
+
+    Config options:
+        crop_label: Label id used for the restrict mask (default: None -> any label)
+        largest_component_only: Restrict to the largest connected component
+            of the crop label (default: False)
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        crop_info = context.intermediate_results.get('fov_crop')
+        prediction = context.intermediate_results.get('refined_prediction',
+                                                     context.intermediate_results['raw_prediction'])
+
+        if crop_info is None:
+            context.intermediate_results['raw_prediction'] = prediction
+            return context
+
+        z_start = crop_info['z_start']
+        z_end = crop_info['z_end']
+        crop_prediction = crop_info['crop_prediction']
+
+        crop_label = self.config.get('crop_label')
+        largest_only = self.config.get('largest_component_only', False)
+
+        if crop_label is not None:
+            mask = (crop_prediction == int(crop_label))
+        else:
+            mask = (crop_prediction > 0)
+
+        if largest_only and mask.any():
+            from scipy import ndimage
+            labeled, num_features = ndimage.label(mask)
+            if num_features > 1:
+                sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
+                mask = labeled == (int(np.argmax(sizes)) + 1)
+
+        full_prediction = np.zeros(crop_prediction.shape, dtype=prediction.dtype)
+        full_prediction[:, :, z_start:z_end] = prediction
+
+        # mask indices are full-frame (crop_prediction spans the whole volume)
+        z_indices = np.where(mask.any(axis=(0, 1)))[0]
+        band_start = band_end = None
+        if z_indices.size > 0:
+            band_start = int(z_indices[0])
+            band_end = int(z_indices[-1]) + 1
+            full_prediction[:, :, :band_start] = 0
+            full_prediction[:, :, band_end:] = 0
+
+        context.intermediate_results['raw_prediction'] = full_prediction
+        if band_start is not None:
+            logger.info(
+                "FOVRestrictStep: restricted prediction to z band [%d, %d)",
+                band_start, band_end,
+            )
+        return context
 
 
 class CascadeInferenceStep(PipelineStep):
@@ -318,10 +621,6 @@ class MultiModelConcatStep(PipelineStep):
     then concatenates the predictions into a single multilabel segmentation.
     This is the strategy used by TotalSegmentator for efficient whole-body segmentation.
     """
-    
-    def __init__(self, name: str, config: dict = None):
-        super().__init__(name, config)
-        self._label_mappings = None
     
     def execute(self, context: PipelineContext) -> PipelineContext:
         """

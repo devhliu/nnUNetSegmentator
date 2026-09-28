@@ -45,12 +45,24 @@ class ResampleStep(PipelineStep):
         Config options:
             spacing: Target spacing tuple (default: (1.5, 1.5, 1.5))
             interpolator: SimpleITK interpolator (default: sitk.sitkLinear)
+            only_thickness: If True, keep the in-plane spacing untouched and
+                resample the through-plane (z) axis only. Used by the BOA body
+                tasks, which expect a 5.0 mm slice thickness but preserve the
+                original pixel spacing.
         """
-        target_spacing = self.config.get('spacing', (1.5, 1.5, 1.5))
+        spacing_cfg = self.config.get('spacing', (1.5, 1.5, 1.5))
         interpolator = self.config.get('interpolator', sitk.sitkLinear)
+        only_thickness = self.config.get('only_thickness', False)
         
         image = context.input_image
         original_spacing = image.GetSpacing()
+        
+        if only_thickness:
+            target_spacing = (
+                original_spacing[0], original_spacing[1], spacing_cfg[2]
+            )
+        else:
+            target_spacing = tuple(spacing_cfg)
         
         logger.debug(f"Resampling from {original_spacing} to {target_spacing}")
         
@@ -241,10 +253,8 @@ class MultiChannelStackStep(PipelineStep):
         Execute multi-channel stacking.
         
         Config options:
-            images: List of image keys in intermediate_results
             order: Order of modalities for stacking (default: ['pet', 'ct'])
         """
-        images = self.config.get('images', [])
         order = self.config.get('order', ['pet', 'ct'])
         
         logger.debug(f"Stacking modalities: {order}")
@@ -476,7 +486,7 @@ class ProjectionStep(PipelineStep):
                 - ['mip', 'aip']: Both MIP and AIP (default, 2-channel)
             axis: Manual axis specification (overrides method)
         """
-        from ...utils.projection import create_coronal_projection, create_multichannel_projection
+        from ...utils.projection import create_multichannel_projection
         
         method = self.config.get('method', 'coronal')
         channels = self.config.get('channels', ['mip', 'aip'])

@@ -5,16 +5,13 @@ This module provides writers for various medical image formats.
 """
 
 from .. import image as sitk
+import importlib.util
 import numpy as np
 from pathlib import Path
 from typing import Union, Dict, Any
 import logging
 
-try:
-    import nibabel as nib
-    HAS_NIBABEL = True
-except ImportError:
-    HAS_NIBABEL = False
+HAS_NIBABEL = importlib.util.find_spec("nibabel") is not None
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +65,17 @@ class ImageWriter:
         
         # Write
         if format == 'nifti':
-            path = path.with_suffix('.nii.gz' if compress else '.nii')
+            target_suffix = '.nii.gz' if compress else '.nii'
+            name = path.name
+            lower = name.lower()
+            if lower.endswith(target_suffix):
+                pass  # already carries the requested NIfTI suffix
+            elif lower.endswith('.nii.gz'):
+                path = path.with_name(name[:-7] + target_suffix)
+            elif lower.endswith('.nii'):
+                path = path.with_name(name[:-4] + target_suffix)
+            else:
+                path = path.with_name(name + target_suffix)
             sitk.WriteImage(sitk_image, str(path))
         elif format == 'dicom':
             # DICOM writing requires additional setup

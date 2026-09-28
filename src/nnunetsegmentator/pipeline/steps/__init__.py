@@ -13,6 +13,8 @@ from .preprocessing import (
 )
 from .inference import (
     nnUNetInferenceStep,
+    CropFOVStep,
+    FOVRestrictStep,
     CascadeInferenceStep,
     EnsembleInferenceStep,
     MultiModelConcatStep,
@@ -32,11 +34,15 @@ from .postprocessing import (
     DistanceRefinementStep,
     ShapeConstraintStep,
     PetThresholdStep,
+    VertebraePPPostprocessStep,
+    BoaBodyPartsPostprocessStep,
+    BoaBodyRegionsPostprocessStep,
+    MergeLabelsStep,
 )
 from .visualization import MIPGenerationStep
 from .vertebrae import VertebraeLocalizationStep
 from .quantification import BodyCompositionMetricsStep, TumorMetricsStep
-from .roi import ROIProcessingStep
+from .roi import ROIProcessingStep, RegionCropStep, RegionRestoreStep
 
 __all__ = [
     "PreserveOriginalStep",
@@ -49,6 +55,8 @@ __all__ = [
     "ResampleNibabelStep",
     "ProjectionStep",
     "nnUNetInferenceStep",
+    "CropFOVStep",
+    "FOVRestrictStep",
     "CascadeInferenceStep",
     "EnsembleInferenceStep",
     "MultiModelConcatStep",
@@ -66,9 +74,15 @@ __all__ = [
     "DistanceRefinementStep",
     "ShapeConstraintStep",
     "PetThresholdStep",
+    "VertebraePPPostprocessStep",
+    "BoaBodyPartsPostprocessStep",
+    "BoaBodyRegionsPostprocessStep",
+    "MergeLabelsStep",
     "MIPGenerationStep",
     "VertebraeLocalizationStep",
     "BodyCompositionMetricsStep",
     "TumorMetricsStep",
     "ROIProcessingStep",
+    "RegionCropStep",
+    "RegionRestoreStep",
 ]

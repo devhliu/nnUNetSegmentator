@@ -3,33 +3,16 @@ DEEP-PSMA Task
 
 DEEP-PSMA: Deep learning for PSMA PET segmentation in prostate cancer.
 
-Repository: https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA
-Description: DEEP-PSMA Grand Challenge model for PSMA PET segmentation.
-            Specialized model for prostate cancer lesion detection and segmentation.
-
-Model Download:
-    - Git LFS: https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA.git
-    - Models are stored in Git LFS and will be automatically downloaded when cloning
-    
 Model Storage:
     - Default path: ~/.nnunetsegmentator/models/deep_psma/
-    - Model weights are extracted from Git LFS repository
-    
-Reference:
-    - Part of GTRC-Net family for prostate cancer imaging
-    - Sample data available at: https://zenodo.org/records/18150034
+    - Model weights are extracted from a Git LFS repository
 """
 
 from .base import BaseTask
 from ..core.registry import TaskDefinition, ModelInfo
 from ..pipeline.base import Pipeline
-from ..pipeline.steps.preprocessing import (
-    ResampleStep,
-    ClipIntensityStep,
-    NormalizeStep,
-    SUVThresholdStep,
-)
-from ..pipeline.steps.inference import nnUNetInferenceStep, CascadeInferenceStep
+from ..pipeline.steps.preprocessing import SUVThresholdStep
+from ..pipeline.steps.inference import nnUNetInferenceStep
 from ..pipeline.steps.postprocessing import (
     LargestComponentStep,
     MorphologicalOpsStep,
@@ -43,19 +26,10 @@ class DEEPPSMATask(BaseTask):
     
     This task segments PSMA-avid lesions from PSMA PET/CT images
     for prostate cancer assessment.
-    
-    Repository: https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA
-    Model Download: Git LFS clone from repository
-    Model Path: ~/.nnunetsegmentator/models/deep_psma/
     """
     
     name = "deep_psma"
     description = "PSMA PET lesion segmentation for prostate cancer"
-    
-    # Repository and model information
-    REPO_URL = "https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-DEEP-PSMA"
-    MODEL_DOWNLOAD_METHOD = "git_lfs"
-    SAMPLE_DATA_URL = "https://zenodo.org/records/18150034"
     
     @classmethod
     def get_definition(cls) -> TaskDefinition:
@@ -83,20 +57,12 @@ class DEEPPSMATask(BaseTask):
             pipeline_config={
                 'name': 'deep_psma_pipeline',
                 'steps': [
-                    {
-                        'type': 'resample',
-                        'name': 'resample_pet',
-                        'params': {'spacing': (2.0, 2.0, 2.0)}
-                    },
+                    # Resampling to the model spacing happens inside the
+                    # inference step; intensity normalization is nnUNetv2-internal.
                     {
                         'type': 'suv_threshold',
                         'name': 'suv_threshold',
                         'params': {'threshold': 3.0}
-                    },
-                    {
-                        'type': 'normalize',
-                        'name': 'normalize_pet',
-                        'params': {'method': 'minmax'}
                     },
                     {
                         'type': 'nnunet_inference',
@@ -145,21 +111,12 @@ class DEEPPSMATask(BaseTask):
     def get_default_pipeline(cls) -> Pipeline:
         """Return default processing pipeline"""
         pipeline = Pipeline(name="deep_psma_default")
-        
-        # Preprocessing
-        pipeline.add_step(ResampleStep(
-            'resample',
-            {'spacing': (2.0, 2.0, 2.0)}
-        ))
-        
+
+        # Preprocessing (resampling to the model spacing happens inside the
+        # inference step; intensity normalization is nnUNetv2-internal)
         pipeline.add_step(SUVThresholdStep(
             'suv_threshold',
             {'threshold': 3.0}
-        ))
-        
-        pipeline.add_step(NormalizeStep(
-            'normalize',
-            {'method': 'minmax'}
         ))
         
         # Inference

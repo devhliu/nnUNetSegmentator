@@ -12,12 +12,10 @@ This document provides detailed information about each supported segmentation ta
 
 **Modality:** PET/CT
 
-**Description:** Glioblastoma treatment response segmentation
+**Description:** Total tumor burden segmentation
 
 **Labels:**
-- `tumor_core` (1)
-- `tumor_edema` (2)
-- `tumor_enhancing` (3)
+- `tumor_burden` (1)
 
 **Default Resolution:** 1.5mm isotropic
 
@@ -135,6 +133,65 @@ This document provides detailed information about each supported segmentation ta
 3. nnUNet inference (5 folds)
 4. Postprocessing (varies by structure)
 
+### BOA Body Parts
+
+**Task ID:** `boa_body_parts`
+
+**Modality:** CT
+
+**Description:** Body parts segmentation — torso, head, arms and legs (BOA body composition analysis)
+
+**Labels:**
+- `torso` (1)
+- `head` (2)
+- `leg_right` (3)
+- `leg_left` (4)
+- `arm_right` (5)
+- `arm_left` (6)
+
+**Default Resolution:** 5.0mm slice thickness (in-plane spacing preserved)
+
+**Input Requirements:**
+- CT image
+- NIfTI or DICOM format
+
+**Pipeline Steps:**
+1. Resample the slice thickness to 5.0mm (in-plane spacing preserved)
+2. nnUNet inference (all folds, mirroring disabled)
+3. Fill each label slice-wise, drop components and holes below 3000 voxels
+
+### BOA Body Regions
+
+**Task ID:** `boa_body_regions`
+
+**Modality:** CT
+
+**Description:** Body regions segmentation — tissue compartments and body cavities
+
+**Labels:**
+- `subcutaneous_tissue` (1)
+- `muscle` (2)
+- `abdominal_cavity` (3)
+- `thoracic_cavity` (4)
+- `bone` (5)
+- `glands` (6)
+- `pericardium` (7)
+- `breast_implant` (8)
+- `mediastinum` (9)
+- `brain` (10)
+- `nervous_system` (11)
+
+**Default Resolution:** 5.0mm slice thickness (in-plane spacing preserved)
+
+**Input Requirements:**
+- CT image
+- NIfTI or DICOM format
+
+**Pipeline Steps:**
+1. Resample the slice thickness to 5.0mm (in-plane spacing preserved)
+2. nnUNet inference (all folds, mirroring disabled)
+3. Keep only the largest component of the unique regions, flagging the rest as 255
+
 ### MRSegmentator
 
 **Task ID:** `mrsegmentator`
@@ -171,15 +228,16 @@ This document provides detailed information about each supported segmentation ta
 
 - **PET/CT:** GTRC-Net
 - **PET:** LION, DEEP-PSMA
-- **CT:** TotalSegmentator, DukeSeg
+- **CT:** TotalSegmentator, DukeSeg, BOA
 - **MR:** MRSegmentator, TotalSegmentator MR
 - **Multi-modality (MR/CT):** MRSegmentator
 
 ### Choose Based on Structures
 
-- **Glioblastoma:** GTRC-Net
+- **Tumor burden:** GTRC-Net
 - **Lesions:** LION, DEEP-PSMA
 - **Comprehensive anatomy (CT):** TotalSegmentator, DukeSeg
+- **Body composition (CT):** BOA Body Parts, BOA Body Regions
 - **Comprehensive anatomy (MR):** MRSegmentator, TotalSegmentator MR
 - **Abdominal/pelvic/thorax (MR):** MRSegmentator
 

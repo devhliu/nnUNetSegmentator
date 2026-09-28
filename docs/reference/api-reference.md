@@ -71,8 +71,6 @@ Container for segmentation results.
 #### Methods
 
 - `get_array()` - Get as numpy array
-- `get_label_array(label_name)` - Get specific label as array
-- `save(filepath)` - Save to file
 
 ## Utility Functions
 

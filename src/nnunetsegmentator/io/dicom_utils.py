@@ -2,20 +2,17 @@
 DICOM utilities.
 
 This module provides utilities for handling DICOM files, including:
-- Conversion to NIfTI using dcm2niix (via dicom2nifti)
+- Conversion of a DICOM series to NIfTI using dicom2nifti (modality LUT applied)
+- Primary-series selection when a directory bundles several acquisitions
 - Extraction of PET SUV parameters
 - DICOM tag parsing
-
-Ported from LION/lionz/image_conversion.py
 """
 
-import os
 import logging
 import contextlib
 import io
-import shutil
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, Union
+from typing import Dict, Any, List, Tuple, Optional, Union
 import numpy as np
 
 # Try to import pydicom and dicom2nifti
@@ -97,9 +94,11 @@ def compute_corrected_activity(params: Dict[str, Any]) -> Optional[float]:
     Compute decay-corrected activity.
     """
     def tag_to_time_seconds(tag):
-        if not tag: return None
+        if not tag:
+            return None
         time_str = str(tag).split('.')[0]
-        if len(time_str) < 6: return None
+        if len(time_str) < 6:
+            return None
         h, m, s = int(time_str[0:2]), int(time_str[2:4]), int(time_str[4:6])
         return h * 3600 + m * 60 + s
 
@@ -165,26 +164,110 @@ def calculate_suv_conversion_factor(params: Dict[str, Any]) -> float:
     return 1.0
 
 
-def convert_dicom_to_nifti(dicom_dir: Union[str, Path], output_dir: Union[str, Path]) -> Path:
+def _series_uid(dataset: Any) -> str:
+    """Return the SeriesInstanceUID as a string ('' when absent)."""
+    return str(getattr(dataset, "SeriesInstanceUID", "") or "")
+
+
+def _position_key(dataset: Any) -> Tuple[int, float]:
+    """Sort key ordering slices along the acquisition (slice-normal) axis.
+
+    The slice normal (row x col direction cosines) is used so the ordering is
+    correct for any acquisition plane, including series whose column cosine is
+    negated. Falls back to the z position, then the instance number.
     """
-    Convert a directory of DICOM files to NIfTI.
-    Returns path to the directory containing NIfTI files.
+    ipp = getattr(dataset, "ImagePositionPatient", None)
+    iop = getattr(dataset, "ImageOrientationPatient", None)
+    if ipp is not None and iop is not None and len(ipp) >= 3 and len(iop) >= 6:
+        row = np.asarray(iop[:3], dtype=float)
+        col = np.asarray(iop[3:6], dtype=float)
+        normal = np.cross(row, col)
+        return (0, float(np.dot(np.asarray(ipp[:3], dtype=float), normal)))
+    if ipp is not None and len(ipp) >= 3:
+        return (1, float(ipp[2]))
+    return (2, float(getattr(dataset, "InstanceNumber", 0) or 0))
+
+
+def select_primary_series(
+    dicom_files: Union[str, Path, List[Union[str, Path]]]
+) -> Tuple[List[str], List[Any]]:
+    """Resolve DICOM file(s)/directory to the dominant series.
+
+    dicom2nifti does not group by SeriesInstanceUID, and a directory may bundle
+    several series (e.g. a localizer plus the diagnostic scan). Files are
+    grouped by SeriesInstanceUID and the series with the most slices is used;
+    a warning is emitted when more than one series is present.
+
+    Returns ``(file_paths, datasets)`` in slice order.
     """
     if not DICOM_AVAILABLE:
-        raise ImportError("dicom2nifti is required")
-        
-    dicom_dir = Path(dicom_dir)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Use dicom2nifti
-    # Note: LION uses a custom dcm2niix wrapper, but dicom2nifti is a pure python alternative 
-    # (or wrapper around dcm2niix if installed) that is easier to manage as a dependency.
-    # If dcm2niix binary is available, dicom2nifti will use it? 
-    # Actually dicom2nifti is Python based but can call dcm2niix.
-    
-    # Suppress output
+        raise ImportError("pydicom and dicom2nifti are required for DICOM conversion")
+
+    if isinstance(dicom_files, (str, Path)):
+        directory = Path(dicom_files)
+        reader_files = sorted(str(p) for p in directory.glob("*.dcm"))
+        if not reader_files:
+            reader_files = sorted(
+                str(p) for p in directory.iterdir()
+                if p.is_file() and _has_dicom_magic(p)
+            )
+        dicom_files = reader_files
+
+    pairs = [(str(f), pydicom.dcmread(str(f))) for f in dicom_files]
+    if not pairs:
+        raise ValueError("No DICOM files provided")
+
+    groups: Dict[str, List[Tuple[str, Any]]] = {}
+    for path, dataset in pairs:
+        groups.setdefault(_series_uid(dataset), []).append((path, dataset))
+
+    if len(groups) > 1:
+        counts = {uid: len(members) for uid, members in groups.items()}
+        primary_uid = max(counts, key=lambda uid: counts[uid])
+        logger.warning(
+            "Input contains %d DICOM series; using the largest (%d slices, "
+            "SeriesInstanceUID=%s). Slice counts: %s",
+            len(groups), counts[primary_uid], primary_uid, counts,
+        )
+    else:
+        primary_uid = next(iter(groups))
+
+    ordered = sorted(groups[primary_uid], key=lambda pair: _position_key(pair[1]))
+    return [path for path, _ in ordered], [dataset for _, dataset in ordered]
+
+
+def _has_dicom_magic(path: Path) -> bool:
+    """Detect part-10 DICOM files without a .dcm extension via the DICM magic."""
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(128)
+            return handle.read(4) == b"DICM"
+    except OSError:
+        return False
+
+
+def convert_series_to_nifti(
+    dicom_files: Union[str, Path, List[Union[str, Path]]],
+    output_file: Union[str, Path],
+    reorient_nifti: bool = True,
+) -> Tuple[Any, List[str]]:
+    """Convert one DICOM series to NIfTI using dicom2nifti.
+
+    Unlike a hand-rolled reader, dicom2nifti applies the modality LUT
+    (RescaleSlope/RescaleIntercept), so CT volumes carry correct HU values, and
+    with ``reorient_nifti=True`` the data/affine are stored in the canonical LAS
+    space used by TotalSegmentator/MOOSE.
+
+    Returns ``(nibabel_image, primary_file_paths)``.
+    """
+    file_paths, datasets = select_primary_series(dicom_files)
+
+    output_file = Path(output_file)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+
     with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-        dicom2nifti.convert_directory(dicom_dir, output_dir, compression=True, reorient=True)
-        
-    return output_dir
+        results = dicom2nifti.convert_dicom.dicom_array_to_nifti(
+            datasets, str(output_file), reorient_nifti=reorient_nifti
+        )
+
+    return results["NII"], file_paths

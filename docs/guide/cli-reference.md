@@ -100,15 +100,30 @@ nnunetsegmentator info [OPTIONS]
 
 ### install-models
 
-Install task model files from local archives or directories.
+Install task model files from local archives/directories, either by explicit
+canonical key or by auto-discovery under a root directory.
 
 ```bash
-nnunetsegmentator install-models --task TASK --model DATASETID_MODELNAME=PATH [--model DATASETID_MODELNAME=PATH ...] [--force]
+# Explicit mapping (repeatable)
+nnunetsegmentator install-models --task TASK --model DATASETID_MODELNAME=PATH [--model ...] [--force]
+
+# Auto-discover under a root directory
+nnunetsegmentator install-models --from ROOT [--task TASK] [--dry-run] [--force]
 ```
+
+**Options:**
+- `--model DATASETID_MODELNAME=PATH` - Explicit mapping (repeatable).
+- `--from ROOT` - Recursively search ROOT for model payloads/archives and install them.
+- `--dry-run` - With `--from`, only list what would be installed (no writes).
+- `--force` - Overwrite existing installed model directories.
 
 **Notes:**
 - `DATASETID_MODELNAME` must be canonical task_id `Dataset<数字>_<model_name>`.
 - `PATH` can point to a directory (unzipped model) or archive (`.zip`, `.tar`, `.tar.gz`, `.tgz`).
+- With `--from`, candidates are payload directories (`dataset.json`/`plans.json` present)
+  and weight archives; each is matched to a registered model by a canonical `task_id`
+  or `Dataset<数字>` prefix found in the candidate or an ancestor directory name.
+  Ambiguous candidates (a shared prefix) are skipped — narrow with `-t/--task`.
 - Installed output path follows the standard structure:
   `{NNUNETSEGMENTATOR_MODEL_ROOTPATH}/{task_name}/{task_id}`.
 
@@ -139,6 +154,16 @@ nnunetsegmentator install-models \
   --task total \
   --model Dataset291_total_organs=/local/total_organs.zip \
   --model Dataset292_total_vertebrae=/local/total_vertebrae/
+```
+
+### Install Local Models (auto-discovery)
+
+```bash
+# Preview matches under a weights root without writing anything
+nnunetsegmentator install-models --from /data/weights --dry-run
+
+# Install everything that matches a registered model, overwriting existing ones
+nnunetsegmentator install-models --from /data/weights --force
 ```
 
 ### With Configuration File

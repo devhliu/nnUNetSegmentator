@@ -93,22 +93,32 @@ class ImageReader:
         path: Union[Path, List[str]],
         modality: str = None
     ) -> Tuple[sitk.Image, Dict[str, Any]]:
-        """Read DICOM series"""
+        """Read DICOM series via dicom2nifti (correct HU/applied modality LUT)."""
         logger.debug(f"Reading DICOM from: {path}")
-        
+
         if isinstance(path, list):
-            series_files = path
+            series_files = [str(f) for f in path]
         else:
             reader = sitk.ImageSeriesReader()
             series_files = reader.GetGDCMSeriesFileNames(str(path))
-            
+
             if not series_files:
                 raise ValueError(f"No DICOM series found in {path}")
-        
-        reader = sitk.ImageSeriesReader()
-        reader.SetFileNames(series_files)
-        image = reader.Execute()
-        
+
+        # dicom2nifti applies RescaleSlope/Intercept (correct CT HU) and stores
+        # the data/affine in canonical LAS orientation; the same conversion is
+        # reused for the persisted NIfTI, so the pipeline input and the saved
+        # volume stay geometrically identical.
+        import tempfile
+
+        from .dicom_utils import convert_series_to_nifti
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            nifti_image, primary_files = convert_series_to_nifti(
+                series_files, Path(tmp_dir) / "series.nii.gz"
+            )
+            image = sitk.Image.from_nifti(nifti_image)
+
         # Extract DICOM metadata
         metadata = {
             'format': 'dicom',
@@ -116,11 +126,15 @@ class ImageReader:
             'origin': image.GetOrigin(),
             'direction': image.GetDirection(),
             'size': image.GetSize(),
-            'num_slices': len(series_files),
+            'num_slices': len(primary_files),
+            'dicom_files': list(primary_files),
         }
-        
-        if HAS_PYDICOM and series_files:
-            ds = pydicom.dcmread(series_files[0])
+        if not isinstance(path, list):
+            # Reference series directory, kept for downstream DICOM-SEG export.
+            metadata['dicom_dir'] = str(path)
+
+        if HAS_PYDICOM and primary_files:
+            ds = pydicom.dcmread(primary_files[0], stop_before_pixels=True)
             metadata.update({
                 'modality': ds.get('Modality', 'Unknown'),
                 'patient_id': ds.get('PatientID', 'Unknown'),
@@ -132,10 +146,10 @@ class ImageReader:
                 'slice_thickness': float(ds.get('SliceThickness', 0)),
                 'pixel_spacing': ds.get('PixelSpacing', [0, 0]),
             })
-        
+
         if modality:
             metadata['modality'] = modality
-        
+
         return image, metadata
 
 
@@ -176,7 +190,6 @@ class MultiModalReader:
         if align_to in results:
             ref_image = results[align_to][0]
             ref_spacing = ref_image.GetSpacing()
-            ref_size = ref_image.GetSize()
             ref_origin = ref_image.GetOrigin()
             ref_direction = ref_image.GetDirection()
             

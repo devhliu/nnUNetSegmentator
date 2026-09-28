@@ -10,7 +10,7 @@ This guide explains how task-model wiring works at runtime and how to add or ext
 | Task retrieval | `src/nnunetsegmentator/core/orchestrator.py` | `SegmentationOrchestrator` resolves task via `TaskRegistry.get_task(task_name)`. |
 | Primary model path resolution | `src/nnunetsegmentator/core/orchestrator.py` | Checks `{model_root}/{task_name}/{task_id}` first, then falls back to `TaskRegistry.get_model_path(model_name)`. |
 | Pipeline execution | `src/nnunetsegmentator/pipeline/builders.py` + steps | Inference steps use `model_name`; registry resolves the actual path. |
-| Model acquisition | `src/nnunetsegmentator/core/registry.py` | Download path: `get_model_path`; local path install: `install_task_models_from_local`. |
+| Model acquisition | `src/nnunetsegmentator/core/registry.py` | Resolution only: `get_model_path` (raises `ModelNotFoundError` when absent, never downloads). Explicit download: `download_model` / `download_task_models`. Local install: `install_task_models_from_local` (explicit keys) or `install_models_from_root` (auto-discovery). |
 
 ## Canonical task/model standard
 
@@ -77,6 +77,7 @@ class MyTask(BaseTask):
 |---|---|---|
 | External task registration (recommended) | Add custom tasks in downstream app | Build `TaskDefinition`/`ModelInfo` and call `TaskRegistry.register(task_def)` at startup. |
 | Local model installation | Use private or pre-downloaded artifacts | Call `TaskRegistry.install_task_models_from_local(task_name=..., model_sources=...)`. |
+| Local model auto-discovery | Install pre-downloaded weights scattered under a root | Call `TaskRegistry.install_models_from_root(root=..., task_name=None, force=False, dry_run=False)`. |
 | Explicit model path per run | One-off execution | Pass model path at orchestrator/step level (less reusable). |
 
 ## 4. Local model install interfaces
@@ -85,7 +86,18 @@ class MyTask(BaseTask):
 |---|---|---|
 | Python API | `TaskRegistry.install_task_models_from_local(task_name="total", model_sources={"Dataset291_total_organs": "/local/total_organs.zip", "Dataset292_total_vertebrae": "/local/total_vertebrae/"}, force=True)` | `Dataset<数字>_<model_name>` |
 | CLI | `nnunetsegmentator install-models --task total --model Dataset291_total_organs=/local/total_organs.zip --model Dataset292_total_vertebrae=/local/total_vertebrae/ --force` | `Dataset<数字>_<model_name>` |
+| Python API (auto-discovery) | `TaskRegistry.install_models_from_root(root="/local/weights", task_name=None, force=False, dry_run=False)` | matched by `Dataset<数字>_<model_name>` or `Dataset<数字>` prefix |
+| CLI (auto-discovery) | `nnunetsegmentator install-models --from /local/weights [--task total] [--dry-run] [--force]` | matched by `Dataset<数字>_<model_name>` or `Dataset<数字>` prefix |
 | Script | `python scripts/model_manager.py --install-local --task total --model Dataset291_total_organs=/local/total_organs.zip` | `Dataset<数字>_<model_name>` |
+
+Auto-discovery searches a root recursively for payload directories (containing
+`dataset.json` / `plans.json`) and weight archives (`.zip`, `.tar`, `.tar.gz`,
+`.tgz`), then matches each candidate to a registered model using its name or its
+ancestor directory names. Ambiguous candidates (a `Dataset<数字>` prefix shared
+by several models) and candidates with no match are skipped, never installed;
+narrow an ambiguous prefix with `--task`. Installation reuses the same
+extract/normalize/validate path as the explicit interface, and an existing
+installation is kept unless `--force` is given.
 
 ## 5. Validation checklist
 

@@ -5,7 +5,6 @@ This module provides functions for visualizing segmentations.
 """
 
 import numpy as np
-from typing import Tuple, Dict, Optional, List
 import logging
 
 logger = logging.getLogger(__name__)

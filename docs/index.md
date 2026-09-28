@@ -54,11 +54,13 @@ result = orchestrator.segment("input.nii.gz", "output.nii.gz")
 
 | Task | Modality | Description |
 |------|----------|-------------|
-| GTRC-Net | PET/CT | Glioblastoma segmentation |
+| GTRC-Net | PET/CT | Total tumor burden segmentation |
 | LION | PET | Lesion identification |
 | DEEP-PSMA | PET | PSMA lesion segmentation |
 | TotalSegmentator | CT | 117 anatomical structures |
 | DukeSeg | CT | 140 anatomical structures |
+| BOA Body Parts | CT | 6 body parts |
+| BOA Body Regions | CT | 11 body regions |
 
 ## Community
 

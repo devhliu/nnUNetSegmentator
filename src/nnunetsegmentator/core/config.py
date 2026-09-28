@@ -265,38 +265,6 @@ class Config:
         logger.debug(f"Set nnUNet_preprocessed = {self.nnunet_preprocessed}")
         logger.debug(f"Set nnUNet_results = {self.nnunet_results}")
     
-    def setup_logging(self) -> None:
-        """
-        Setup logging based on configuration.
-        """
-        import sys
-        
-        # Set log level
-        logging.basicConfig(
-            level=getattr(logging, self.log_level.upper()),
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[logging.StreamHandler(sys.stdout)]
-        )
-        
-        # Add file handler if specified
-        if self.log_file:
-            self.log_file.parent.mkdir(parents=True, exist_ok=True)
-            file_handler = logging.FileHandler(self.log_file)
-            file_handler.setFormatter(
-                logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            )
-            logging.getLogger().addHandler(file_handler)
-    
-    def ensure_directories(self) -> None:
-        """
-        Create all configured directories if they don't exist.
-        """
-        for attr in ['data_dir', 'output_dir', 'model_dir', 'cache_dir']:
-            path = getattr(self, attr)
-            if path:
-                path.mkdir(parents=True, exist_ok=True)
-                logger.debug(f"Ensured directory: {path}")
-    
     def get_model_path(self, task_name: str, task_id: str = None) -> Path:
         """
         Get the model path following the standard structure.

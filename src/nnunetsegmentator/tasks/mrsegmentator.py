@@ -4,31 +4,17 @@ MRSegmentator Task - Multi-Modality Segmentation of 40 Classes in MRI and CT
 This module implements the MRSegmentator task with 40 anatomical structures
 for MRI and CT imaging of abdominal, pelvic, and thorax regions.
 
-Repository: https://github.com/hhaentze/MRSegmentator
-Description: Multi-modality segmentation of 40 classes in MRI and CT.
-            Works well on different sequence types including T1- and T2-weighted,
-            Dixon sequences and even CT images.
-
-Model Download:
-    - Models are automatically downloaded from GitHub releases
-    - Default download location: ~/.conda/envs/<name>/lib/python3.11/site-packages/mrsegmentator/weights
-    - Can be customized via MRSEG_WEIGHTS_PATH environment variable
-    
 Model Storage:
     - Default path: ~/.nnunetsegmentator/models/mrsegmentator/
     - Model weights are downloaded automatically on first use
-    
+
 Available Models:
     - mrsegmentator: 40 classes (MRI and CT)
-    
-License: Apache-2.0
-Citation: Häntze et al., Radiology: Artificial Intelligence (2024). https://doi.org/10.1148/ryai.240777
 """
 
-from typing import Dict, List, Optional
+from typing import Dict
 from ..core.registry import TaskDefinition, ModelInfo
 from ..pipeline.base import Pipeline
-from ..pipeline.steps.preprocessing import ResampleStep, NormalizeStep
 from ..pipeline.steps.inference import nnUNetInferenceStep
 from ..pipeline.steps.postprocessing import LargestComponentStep
 from .base import BaseTask
@@ -89,20 +75,10 @@ class MRSegmentatorTask(BaseTask):
     This task segments 40 organs and structures in human MRI scans of the
     abdominal, pelvic and thorax regions. Works well on different sequence
     types including T1- and T2-weighted, Dixon sequences and even CT images.
-    
-    Repository: https://github.com/hhaentze/MRSegmentator
-    Model Download: Automatic from GitHub releases
-    Model Path: ~/.nnunetsegmentator/models/mrsegmentator/
     """
     
     name = "mrsegmentator"
     description = "Multi-modality segmentation of 40 classes in MRI and CT"
-    
-    # Repository and model information
-    REPO_URL = "https://github.com/hhaentze/MRSegmentator"
-    MODEL_DOWNLOAD_METHOD = "pip"
-    WEIGHTS_URL = "https://github.com/hhaentze/MRSegmentator/releases/download/v1.2.0/weights.zip"
-    PAPER_URL = "https://doi.org/10.1148/ryai.240777"
     
     @classmethod
     def get_definition(cls) -> TaskDefinition:
@@ -125,16 +101,8 @@ class MRSegmentatorTask(BaseTask):
             pipeline_config={
                 'name': 'mrsegmentator_pipeline',
                 'steps': [
-                    {
-                        'type': 'resample',
-                        'name': 'resample_mr',
-                        'params': {'spacing': (1.5, 1.5, 1.5)}
-                    },
-                    {
-                        'type': 'normalize',
-                        'name': 'normalize_mr',
-                        'params': {'method': 'zscore'}
-                    },
+                    # Resampling to the model spacing happens inside the
+                    # inference step; intensity normalization is nnUNetv2-internal.
                     {
                         'type': 'nnunet_inference',
                         'name': 'mrsegmentator_inference',
@@ -172,19 +140,9 @@ class MRSegmentatorTask(BaseTask):
     def get_default_pipeline(cls) -> Pipeline:
         """Return default processing pipeline"""
         pipeline = Pipeline(name="mrsegmentator_default")
-        
-        # Preprocessing
-        pipeline.add_step(ResampleStep(
-            'resample',
-            {'spacing': (1.5, 1.5, 1.5)}
-        ))
-        
-        pipeline.add_step(NormalizeStep(
-            'normalize',
-            {'method': 'zscore'}
-        ))
-        
-        # Inference
+
+        # Inference (resampling to the model spacing happens inside the
+        # inference step; intensity normalization is nnUNetv2-internal)
         pipeline.add_step(nnUNetInferenceStep(
             'inference',
             {

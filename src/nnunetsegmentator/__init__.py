@@ -48,11 +48,6 @@ Example:
             output_path='tumor.nii.gz'
         )
 
-Note:
-    All segmentation models are developed by their respective original authors.
-    This framework provides a unified interface to access these models.
-    Please cite the original publications when using specific models.
-
 See Also:
     - Documentation: https://github.com/devhliu/nnunetsegmentator#readme
     - Examples: https://github.com/devhliu/nnunetsegmentator/tree/main/examples

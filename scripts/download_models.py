@@ -24,7 +24,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
 
@@ -34,7 +34,6 @@ try:
     import requests
     from tqdm import tqdm
     from nnunetsegmentator.utils.model_layout import (
-        dataset_prefix,
         find_model_payload_root,
         has_model_payload,
         is_canonical_task_id,

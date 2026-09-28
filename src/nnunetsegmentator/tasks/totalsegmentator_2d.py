@@ -4,39 +4,26 @@ TotalSegmentator 2D Task - Fast 2D Projection-Based Segmentation
 This module implements the TotalSegmentator 2D (TS2D) task for rapid anatomical
 structure segmentation using 2D projections of 3D CT scans.
 
-Repository: https://github.com/risc-mi/totalsegmentator2D
-Description: Fast and lightweight tool for anatomical structure segmentation 
-            by projecting CT scans into 2D views. Results in less than a second.
-
-Model Download:
-    - Models are automatically downloaded from Zenodo
-    - ts2d-v2-ep4000b2: https://zenodo.org/records/16985939 (117 classes)
-    - ts2d-v1-ep4000b2: https://zenodo.org/records/16574232 (104 classes)
-    - tsxr-v2-ep1000b2: https://zenodo.org/records/17052912 (X-ray, 117 classes)
-    
 Model Storage:
     - Default path: ~/.nnunetsegmentator/models/ts2d/
-    - Model weights are downloaded from Zenodo on first use
-    
+    - Model weights are downloaded on first use
+
 Model Components (each model has 5 sub-models):
     - cardiac: Heart and vessel structures
     - muscles: Muscle and bone structures
     - organs: Organ segmentation
     - ribs: Rib segmentation
     - vertebrae: Vertebrae segmentation
-    
+
 Performance:
     - Inference time: 0.5-0.9 seconds (vs 43-146 seconds for 3D)
     - Best for bone structures (DSC ~0.90)
-    
-License: See repository
 """
 
-from typing import Dict, List, Optional
 from ..core.registry import TaskDefinition, ModelInfo
 from ..pipeline.base import Pipeline
-from ..pipeline.steps.preprocessing import ResampleStep, ClipIntensityStep, NormalizeStep
-from ..pipeline.steps.inference import nnUNetInferenceStep, MultiModelConcatStep
+from ._helpers import build_pipeline
+from ._sources import ts2d_url
 from .base import BaseTask
 import logging
 
@@ -145,11 +132,9 @@ class TS2DTask(BaseTask):
     
     Uses 2D projections of 3D CT scans for fast inference (< 1 second)
     while maintaining good accuracy for most anatomical structures.
-    
-    Repository: https://github.com/risc-mi/totalsegmentator2D
-    Model Download: Automatic download from Zenodo
-    Model Path: ~/.nnunetsegmentator/models/ts2d/
-    
+
+    Model Storage: ~/.nnunetsegmentator/models/ts2d/
+
     Features:
     - Coronal projection (MIP + AIP) for 2D U-Net input
     - 5-part model strategy for efficient inference
@@ -165,24 +150,20 @@ class TS2DTask(BaseTask):
     name = "ts2d"
     description = "TotalSegmentator 2D: Fast projection-based segmentation (117 structures, <1s inference)"
     
-    # Repository and model information
-    REPO_URL = "https://github.com/risc-mi/totalsegmentator2D"
-    MODEL_DOWNLOAD_METHOD = "zenodo"
-    ZENODO_V2_URL = "https://zenodo.org/records/16985939"
-    ZENODO_V1_URL = "https://zenodo.org/records/16574232"
-    
     @classmethod
     def get_definition(cls) -> TaskDefinition:
         """Return task definition for registry."""
         
-        base_url = "https://zenodo.org/api/files/"  # Would be actual Zenodo URLs
-        
+        # TS2D v2 default weights: five anatomical group models on Zenodo
+        # (key ``ts2d-v2-ep4000b2``, record 16985939), one archive per group.
+        key = "ts2d-v2-ep4000b2"
+
         models = {
             # 5-part model strategy for TS2D v2
             "ts2d_v2_organs": ModelInfo(
                 name="ts2d_v2_organs",
                 task_id="Dataset900_ts2d_v2_organs",
-                url=f"{base_url}/ts2d_v2_organs.zip",
+                url=ts2d_url(key, "organs"),
                 checksum="",
                 labels=TS2D_PART_ORGANS,
                 modality="CT",
@@ -193,7 +174,7 @@ class TS2DTask(BaseTask):
             "ts2d_v2_vertebrae": ModelInfo(
                 name="ts2d_v2_vertebrae",
                 task_id="Dataset901_ts2d_v2_vertebrae",
-                url=f"{base_url}/ts2d_v2_vertebrae.zip",
+                url=ts2d_url(key, "vertebrae"),
                 checksum="",
                 labels=TS2D_PART_VERTEBRAE,
                 modality="CT",
@@ -204,7 +185,7 @@ class TS2DTask(BaseTask):
             "ts2d_v2_cardiac": ModelInfo(
                 name="ts2d_v2_cardiac",
                 task_id="Dataset902_ts2d_v2_cardiac",
-                url=f"{base_url}/ts2d_v2_cardiac.zip",
+                url=ts2d_url(key, "cardiac"),
                 checksum="",
                 labels=TS2D_PART_CARDIAC,
                 modality="CT",
@@ -215,7 +196,7 @@ class TS2DTask(BaseTask):
             "ts2d_v2_muscles": ModelInfo(
                 name="ts2d_v2_muscles",
                 task_id="Dataset903_ts2d_v2_muscles",
-                url=f"{base_url}/ts2d_v2_muscles.zip",
+                url=ts2d_url(key, "muscles"),
                 checksum="",
                 labels=TS2D_PART_MUSCLES,
                 modality="CT",
@@ -226,7 +207,7 @@ class TS2DTask(BaseTask):
             "ts2d_v2_ribs": ModelInfo(
                 name="ts2d_v2_ribs",
                 task_id="Dataset904_ts2d_v2_ribs",
-                url=f"{base_url}/ts2d_v2_ribs.zip",
+                url=ts2d_url(key, "ribs"),
                 checksum="",
                 labels=TS2D_PART_RIBS,
                 modality="CT",
@@ -243,8 +224,8 @@ class TS2DTask(BaseTask):
                 "default": {
                     "preprocessing": [
                         {"type": "projection", "method": "coronal", "channels": ["mip", "aip"]},
-                        {"type": "clip_intensity", "min": -1024, "max": 3071},
-                        {"type": "normalize", "method": "ct"},
+                        # Intensity normalization is nnUNetv2-internal (plans scheme);
+                        # the upstream pipeline does not clip intensities.
                     ],
                     "inference": {
                         "models": ["ts2d_v2_organs", "ts2d_v2_vertebrae", "ts2d_v2_cardiac",
@@ -272,53 +253,16 @@ class TS2DTask(BaseTask):
     def get_default_pipeline(cls, mode: str = "default") -> Pipeline:
         """
         Return default processing pipeline.
-        
+
+        Delegates construction to PipelineBuilder so the mode-based
+        pipeline_config (pre/inference/post sections) is interpreted in one
+        place, including the multi-model concat label mappings derived from
+        each group model's local labels versus the task's global labels.
+
         Args:
             mode: Pipeline mode (currently only "default" supported)
         """
-        from ..pipeline.steps.preprocessing import ProjectionStep
-        
-        definition = cls.get_definition()
-        config = definition.pipeline_config.get(mode, definition.pipeline_config["default"])
-        
-        pipeline = Pipeline()
-        
-        # Add projection step
-        pipeline = pipeline | ProjectionStep(
-            name="coronal_projection",
-            config={
-                "method": "coronal",
-                "channels": ["mip", "aip"]
-            }
-        )
-        
-        # Add preprocessing
-        for step_config in config["preprocessing"]:
-            if step_config["type"] == "clip_intensity":
-                pipeline = pipeline | ClipIntensityStep(
-                    name="clip_intensity",
-                    config={
-                        "lower": step_config.get("min"),
-                        "upper": step_config.get("max")
-                    }
-                )
-            elif step_config["type"] == "normalize":
-                pipeline = pipeline | NormalizeStep(
-                    name="normalize",
-                    config={"method": step_config["method"]}
-                )
-        
-        # Add ensemble inference
-        inference_config = config["inference"]
-        pipeline = pipeline | MultiModelConcatStep(
-            name="ts2d_ensemble",
-            config={
-                "model_names": inference_config["models"],
-                "label_mappings": [],
-            }
-        )
-        
-        return pipeline
+        return build_pipeline(cls.get_definition(), mode)
 
 
 class TSXRTask(BaseTask):
@@ -327,35 +271,74 @@ class TSXRTask(BaseTask):
     
     Segments 117 anatomical structures directly from 2D X-ray images
     using models trained on synthetic projections.
-    
-    Repository: https://github.com/risc-mi/totalsegmentator2D
-    Model Download: Automatic download from Zenodo
-    Model Path: ~/.nnunetsegmentator/models/tsxr/
+
+    Model Storage: ~/.nnunetsegmentator/models/tsxr/
     """
     
     name = "tsxr"
     description = "TotalSegmentator XR: X-ray image segmentation (117 structures)"
     
-    # Repository and model information
-    REPO_URL = "https://github.com/risc-mi/totalsegmentator2D"
-    MODEL_DOWNLOAD_METHOD = "zenodo"
-    ZENODO_URL = "https://zenodo.org/records/17052912"
-    
     @classmethod
     def get_definition(cls) -> TaskDefinition:
         """Return task definition for registry."""
         
-        base_url = "https://zenodo.org/api/files/"
-        
+        # TSXR v2 weights: five anatomical group models on Zenodo
+        # (key ``tsxr-v2-ep1000b2``, record 17052912), same group split as TS2D.
+        key = "tsxr-v2-ep1000b2"
+
         models = {
-            "tsxr_v2": ModelInfo(
-                name="tsxr_v2",
-                task_id="Dataset910_tsxr_v2",
-                url=f"{base_url}/tsxr_v2.zip",
+            "tsxr_v2_organs": ModelInfo(
+                name="tsxr_v2_organs",
+                task_id="Dataset910_tsxr_v2_organs",
+                url=ts2d_url(key, "organs"),
                 checksum="",
-                labels=TS2D_LABELS,
+                labels=TS2D_PART_ORGANS,
                 modality="XR",  # X-ray
-                description="TSXR v2: X-ray segmentation (117 classes)",
+                description="TSXR v2: Organ segmentation (24 classes)",
+                default_preprocessing="xr_standard",
+                default_postprocessing="default"
+            ),
+            "tsxr_v2_vertebrae": ModelInfo(
+                name="tsxr_v2_vertebrae",
+                task_id="Dataset911_tsxr_v2_vertebrae",
+                url=ts2d_url(key, "vertebrae"),
+                checksum="",
+                labels=TS2D_PART_VERTEBRAE,
+                modality="XR",  # X-ray
+                description="TSXR v2: Vertebrae segmentation (26 classes)",
+                default_preprocessing="xr_standard",
+                default_postprocessing="default"
+            ),
+            "tsxr_v2_cardiac": ModelInfo(
+                name="tsxr_v2_cardiac",
+                task_id="Dataset912_tsxr_v2_cardiac",
+                url=ts2d_url(key, "cardiac"),
+                checksum="",
+                labels=TS2D_PART_CARDIAC,
+                modality="XR",  # X-ray
+                description="TSXR v2: Cardiac segmentation (18 classes)",
+                default_preprocessing="xr_standard",
+                default_postprocessing="default"
+            ),
+            "tsxr_v2_muscles": ModelInfo(
+                name="tsxr_v2_muscles",
+                task_id="Dataset914_tsxr_v2_muscles",
+                url=ts2d_url(key, "muscles"),
+                checksum="",
+                labels=TS2D_PART_MUSCLES,
+                modality="XR",  # X-ray
+                description="TSXR v2: Muscle/bone segmentation (23 classes)",
+                default_preprocessing="xr_standard",
+                default_postprocessing="default"
+            ),
+            "tsxr_v2_ribs": ModelInfo(
+                name="tsxr_v2_ribs",
+                task_id="Dataset915_tsxr_v2_ribs",
+                url=ts2d_url(key, "ribs"),
+                checksum="",
+                labels=TS2D_PART_RIBS,
+                modality="XR",  # X-ray
+                description="TSXR v2: Rib segmentation (26 classes)",
                 default_preprocessing="xr_standard",
                 default_postprocessing="default"
             ),
@@ -367,9 +350,13 @@ class TSXRTask(BaseTask):
             pipeline_config={
                 "default": {
                     "preprocessing": [
-                        {"type": "normalize", "method": "minmax"},
+                        # Intensity normalization is nnUNetv2-internal (plans scheme).
                     ],
-                    "inference": {"models": ["tsxr_v2"]},
+                    "inference": {
+                        "models": ["tsxr_v2_organs", "tsxr_v2_vertebrae", "tsxr_v2_cardiac",
+                                   "tsxr_v2_muscles", "tsxr_v2_ribs"],
+                        "ensemble_mode": "concatenate",
+                    },
                     "postprocessing": []
                 }
             },
@@ -389,25 +376,11 @@ class TSXRTask(BaseTask):
     
     @classmethod
     def get_default_pipeline(cls, mode: str = "default") -> Pipeline:
-        """Return default processing pipeline."""
-        definition = cls.get_definition()
-        config = definition.pipeline_config.get(mode, definition.pipeline_config["default"])
-        
-        pipeline = Pipeline()
-        
-        # Add preprocessing
-        for step_config in config["preprocessing"]:
-            if step_config["type"] == "normalize":
-                pipeline = pipeline | NormalizeStep(
-                    name="normalize",
-                    config={"method": step_config["method"]}
-                )
-        
-        # Add inference
-        inference_config = config["inference"]
-        pipeline = pipeline | nnUNetInferenceStep(
-            name="inference",
-            config={"model_name": inference_config["models"][0]}
-        )
-        
-        return pipeline
+        """
+        Return default processing pipeline.
+
+        Delegates construction to PipelineBuilder so the five group models are
+        concatenated with per-model local->global label mappings derived from
+        their local label tables versus the task's global labels.
+        """
+        return build_pipeline(cls.get_definition(), mode)

@@ -1,0 +1,97 @@
+"""
+nnUNetSegmentator Organ Label Management
+
+This sub-module is the single home for per-task organ label data:
+:mod:`.tables` holds the ``{label_id: label_name}`` tables for every
+TotalSegmentator task. Task classes import their tables from here.
+
+Public API:
+    get_labels(task_name)   default output label table of a task
+"""
+
+from .tables import (
+    ABDOMINAL_MUSCLES_LABELS,
+    BODY_LABELS,
+    BODY_PARTS_LABELS,
+    BODY_REGION_LABELS,
+    BRAIN_ANEURYSM_LABELS,
+    BREASTS_LABELS,
+    CEREBRAL_BLEED_LABELS,
+    CRANIOFACIAL_STRUCTURES_LABELS,
+    HEART_CHAMBERS_LABELS,
+    KIDNEY_CYSTS_LABELS,
+    LIVER_LESIONS_LABELS,
+    LIVER_SEGMENTS_LABELS,
+    LIVER_VESSELS_LABELS,
+    LUNG_LOBES,
+    LUNG_NODULES_LABELS,
+    LUNG_VESSELS_LABELS,
+    MR_LABELS,
+    MR_MUSCLES_LABELS,
+    MR_ORGANS_LABELS,
+    PART_CARDIAC_LABELS,
+    PART_MUSCLES_LABELS,
+    PART_ORGANS_LABELS,
+    PART_RIBS_LABELS,
+    PART_VERTEBRAE_LABELS,
+    PLEURAL_PERICARD_EFFUSION_LABELS,
+    TASK_LABEL_TABLES,
+    TEETH_LABELS,
+    TISSUE_TYPES_LABELS_3,
+    TISSUE_TYPES_LABELS_4,
+    TISSUE_TYPES_MR_LABELS,
+    TOTAL_LABELS,
+    TRUNK_CAVITIES_LABELS,
+    VERTEBRAE_BODY_LABELS,
+    VERTEBRAE_MR_LABELS,
+    VERTEBRAE_PP_LABELS,
+    VENTRICLE_PARTS_LABELS,
+    get_labels,
+)
+
+__all__ = [
+    # Lookup API
+    "get_labels",
+    "TASK_LABEL_TABLES",
+    # CT total family
+    "TOTAL_LABELS",
+    "PART_ORGANS_LABELS",
+    "PART_VERTEBRAE_LABELS",
+    "PART_CARDIAC_LABELS",
+    "PART_MUSCLES_LABELS",
+    "PART_RIBS_LABELS",
+    # MR total family
+    "MR_ORGANS_LABELS",
+    "MR_MUSCLES_LABELS",
+    "MR_LABELS",
+    # Specialized tasks
+    "LUNG_VESSELS_LABELS",
+    "BODY_LABELS",
+    "TISSUE_TYPES_LABELS_3",
+    "TISSUE_TYPES_LABELS_4",
+    "TISSUE_TYPES_MR_LABELS",
+    "HEART_CHAMBERS_LABELS",
+    "CEREBRAL_BLEED_LABELS",
+    "LIVER_VESSELS_LABELS",
+    "LUNG_NODULES_LABELS",
+    "VERTEBRAE_BODY_LABELS",
+    "LIVER_LESIONS_LABELS",
+    "KIDNEY_CYSTS_LABELS",
+    "PLEURAL_PERICARD_EFFUSION_LABELS",
+    # v2.5.0-weights tasks
+    "VERTEBRAE_MR_LABELS",
+    "BREASTS_LABELS",
+    "VENTRICLE_PARTS_LABELS",
+    "LIVER_SEGMENTS_LABELS",
+    "TRUNK_CAVITIES_LABELS",
+    "BRAIN_ANEURYSM_LABELS",
+    "VERTEBRAE_PP_LABELS",
+    "ABDOMINAL_MUSCLES_LABELS",
+    "CRANIOFACIAL_STRUCTURES_LABELS",
+    "TEETH_LABELS",
+    # BOA body_composition_analysis tasks
+    "BODY_PARTS_LABELS",
+    "BODY_REGION_LABELS",
+    # Crop label sets
+    "LUNG_LOBES",
+]

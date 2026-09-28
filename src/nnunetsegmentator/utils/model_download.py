@@ -5,7 +5,6 @@ This module provides functionality for downloading, verifying, and managing
 pretrained model weights from various sources (Zenodo, HuggingFace, etc.).
 """
 
-import os
 import hashlib
 import shutil
 import logging
@@ -16,6 +15,8 @@ from urllib.error import URLError, HTTPError
 import json
 import zipfile
 import tarfile
+
+from .model_layout import is_downloadable_url
 
 logger = logging.getLogger(__name__)
 
@@ -295,10 +296,11 @@ class ModelDownloader:
                 return indexed_path
         
         # Download
-        if "xxxxx" in url:
+        if not is_downloadable_url(url):
             raise ValueError(
-                f"Model URL for '{model_name}' is a placeholder ('{url}'). "
-                "Provide a valid model URL or register a local model path."
+                f"Model URL for '{model_name}' is not publicly downloadable ('{url}'). "
+                "Provide valid weights, register a local model path, or use "
+                "`install-models` with a local weights root."
             )
 
         suffix = Path(url.split("?")[0]).suffix or ".zip"
@@ -391,120 +393,3 @@ class ModelDownloader:
         
         logger.info(f"Removed model: {model_name}")
         return True
-
-
-def setup_nnunet_environment(model_path: Path, task_id: str):
-    """
-    Setup nnUNet environment variables for a specific model.
-    
-    Args:
-        model_path: Path to model directory
-        task_id: nnUNet task ID
-    """
-    # Keep nnUNet workspace separate from model storage by default.
-    workspace_root = Path(
-        os.environ.get(
-            "NNUNETSEGMENTATOR_NNUNET_WORKSPACE",
-            str(Path.home() / ".nnunetsegmentator" / "nnunet_workspace"),
-        )
-    )
-    raw_dir = workspace_root / "raw"
-    preprocessed_dir = workspace_root / "preprocessed"
-    results_dir = workspace_root / "results"
-
-    for path in (raw_dir, preprocessed_dir, results_dir):
-        path.mkdir(parents=True, exist_ok=True)
-
-    os.environ['nnUNet_results'] = str(results_dir)
-    os.environ['nnUNet_preprocessed'] = str(preprocessed_dir)
-    os.environ['nnUNet_raw'] = str(raw_dir)
-    
-    logger.debug(f"nnUNet environment set: results={os.environ['nnUNet_results']}")
-
-
-def get_nnunet_model_folder(model_path: Path, task_id: str, 
-                           trainer: str = "nnUNetTrainer",
-                           configuration: str = "3d_fullres") -> Path:
-    """
-    Get the nnUNet model folder path.
-    
-    Args:
-        model_path: Base model path
-        task_id: Task ID
-        trainer: Trainer class name
-        configuration: Model configuration
-    
-    Returns:
-        Path to model folder
-    """
-    # Canonical task_id is Dataset<数字>_<model_name>; keep compatibility if caller passes digits.
-    canonical_task_id = task_id if str(task_id).startswith("Dataset") else f"Dataset{task_id}"
-    # Common nnUNet v2 folder naming under task payload root.
-    folder_name = f"{trainer}__nnUNetPlans__{configuration}"
-    return model_path / canonical_task_id / folder_name
-
-
-# Convenience functions
-def download_totalsegmentator_models(model_names: Optional[list] = None,
-                                    model_dir: Optional[Path] = None) -> Dict[str, Path]:
-    """
-    Download TotalSegmentator models.
-    
-    Args:
-        model_names: List of model names to download (None for all)
-        model_dir: Model storage directory
-    
-    Returns:
-        Dictionary mapping model names to paths
-    """
-    downloader = ModelDownloader(model_dir)
-    
-    # TotalSegmentator model URLs (example URLs, would be actual in production)
-    models = {
-        "total_organs": {
-            "url": "https://zenodo.org/record/xxxxx/files/total_organs.zip",
-            "checksum": ""
-        },
-        "total_vertebrae": {
-            "url": "https://zenodo.org/record/xxxxx/files/total_vertebrae.zip",
-            "checksum": ""
-        },
-        "total_cardiac": {
-            "url": "https://zenodo.org/record/xxxxx/files/total_cardiac.zip",
-            "checksum": ""
-        },
-        "total_muscles": {
-            "url": "https://zenodo.org/record/xxxxx/files/total_muscles.zip",
-            "checksum": ""
-        },
-        "total_ribs": {
-            "url": "https://zenodo.org/record/xxxxx/files/total_ribs.zip",
-            "checksum": ""
-        },
-        "total_fast": {
-            "url": "https://zenodo.org/record/xxxxx/files/total_fast.zip",
-            "checksum": ""
-        },
-    }
-    
-    if model_names is None:
-        model_names = list(models.keys())
-    
-    downloaded = {}
-    failures = {}
-    for name in model_names:
-        if name in models:
-            try:
-                path = downloader.download_model(
-                    name, 
-                    models[name]["url"],
-                    models[name]["checksum"]
-                )
-                downloaded[name] = path
-            except (RuntimeError, ValueError, OSError) as exc:
-                failures[name] = str(exc)
-                logger.error(f"Failed to download {name}: {exc}")
-    if failures:
-        raise RuntimeError(f"Some model downloads failed: {failures}")
-    
-    return downloaded

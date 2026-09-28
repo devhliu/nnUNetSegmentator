@@ -9,8 +9,8 @@ nnunetsegmentator supports multiple pre-configured segmentation tasks for medica
 ### GTRC-Net
 - **Task ID:** `gtrc`
 - **Modality:** PET/CT
-- **Description:** Glioblastoma treatment response segmentation
-- **Labels:** tumor_core, tumor_edema, tumor_enhancing
+- **Description:** Total tumor burden segmentation
+- **Labels:** tumor_burden
 - **Resolution:** 1.5mm isotropic
 
 ### LION
@@ -41,6 +41,20 @@ nnunetsegmentator supports multiple pre-configured segmentation tasks for medica
 - **Labels:** 140 anatomical structures
 - **Resolution:** 1.5mm isotropic
 
+### BOA Body Parts
+- **Task ID:** `boa_body_parts`
+- **Modality:** CT
+- **Description:** Body parts segmentation — torso, head, arms, legs
+- **Labels:** torso, head, leg_right, leg_left, arm_right, arm_left
+- **Resolution:** 5.0mm slice thickness (in-plane spacing preserved)
+
+### BOA Body Regions
+- **Task ID:** `boa_body_regions`
+- **Modality:** CT
+- **Description:** Body regions segmentation — tissue compartments and cavities
+- **Labels:** 11 body regions (subcutaneous tissue, muscle, thoracic cavity, mediastinum, pericardium, abdominal cavity, bone, glands, ...)
+- **Resolution:** 5.0mm slice thickness (in-plane spacing preserved)
+
 ## Task Selection Guide
 
 ### Choose GTRC-Net if:
@@ -61,6 +75,10 @@ nnunetsegmentator supports multiple pre-configured segmentation tasks for medica
 
 ### Choose DukeSeg if:
 - You need 140 anatomical structures
+- You have CT images
+
+### Choose BOA if:
+- You need body composition analysis (body parts or tissue regions)
 - You have CT images
 
 ## Custom Tasks

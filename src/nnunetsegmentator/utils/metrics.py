@@ -44,8 +44,6 @@ def compute_surface_area(
     Returns:
         Surface area
     """
-    from scipy import ndimage
-    
     # Compute gradient
     grad = np.gradient(segmentation.astype(float), spacing)
     

@@ -1,7 +1,5 @@
 """Tests for nnunetsegmentator exceptions"""
 
-import pytest
-
 from nnunetsegmentator.core.exceptions import (
     nnunetsegmentatorError,
     ConfigurationError,

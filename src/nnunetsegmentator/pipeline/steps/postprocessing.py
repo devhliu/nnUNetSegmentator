@@ -6,12 +6,58 @@ This module provides postprocessing steps for refining segmentation results.
 
 import numpy as np
 from scipy import ndimage
-from typing import Dict, Any, List, Tuple
+from typing import Dict, List, Tuple
 import logging
 
 from ..base import PipelineStep, PipelineContext
 
 logger = logging.getLogger(__name__)
+
+# 26-connectivity structuring element used by the BOA body-parts cleanup.
+_ND_26_CONNECTIVITY = np.ones((3, 3, 3), dtype=bool)
+
+
+def _normalize_label_map(labels) -> Dict[int, str]:
+    """
+    Return ``{label_id: label_name}`` regardless of the label dict orientation.
+
+    ``context.metadata['labels']`` may be stored as ``{id: name}`` or
+    ``{name: id}``; both are accepted.
+    """
+    normalized: Dict[int, str] = {}
+    for key, value in (labels or {}).items():
+        if isinstance(key, int):
+            normalized[int(key)] = str(value)
+        else:
+            normalized[int(value)] = str(key)
+    return normalized
+
+
+def _resolve_context_label_ids(label_names, context: PipelineContext) -> List[int]:
+    """
+    Resolve label names to ids using the context label metadata.
+
+    The orchestrator stores the task's output labels ({id: name}) in
+    ``context.metadata['labels']``. Integer entries pass through unchanged.
+    """
+    labels = _normalize_label_map(context.metadata.get('labels'))
+    name_to_id: Dict[str, int] = {
+        name: label_id for label_id, name in labels.items()
+    }
+
+    resolved = []
+    for name in label_names:
+        if isinstance(name, int):
+            resolved.append(name)
+            continue
+        key = str(name)
+        if key not in name_to_id:
+            raise ValueError(
+                f"Label '{name}' not found in context label metadata "
+                f"(available: {sorted(name_to_id) or 'none'})"
+            )
+        resolved.append(name_to_id[key])
+    return resolved
 
 
 class ExpandContractStep(PipelineStep):
@@ -55,26 +101,50 @@ class ExpandContractStep(PipelineStep):
 class LargestComponentStep(PipelineStep):
     """
     Keep only largest connected component.
-    
+
     This step removes all but the largest connected component from
     the segmentation, which is useful for removing small spurious
     regions.
+
+    With the ``labels`` option the operation is applied per label value
+    (replicating the official TotalSegmentator ``keep_largest_blob_multilabel``
+    used by the body task); the multilabel structure is preserved.
     """
-    
+
     def execute(self, context: PipelineContext) -> PipelineContext:
         """
         Execute largest component selection.
-        
+
         Config options:
             min_size: Minimum component size to keep (default: None, keep only largest)
             keep_top_n: Keep top N largest components (default: 1)
+            labels: Label names/ids to process per label (optional)
         """
         min_size = self.config.get('min_size', None)
         keep_top_n = self.config.get('keep_top_n', 1)
-        
+        labels_cfg = self.config.get('labels')
+
         seg = context.intermediate_results.get('refined_prediction',
                                                context.intermediate_results['raw_prediction'])
-        
+
+        if labels_cfg:
+            label_ids = _resolve_context_label_ids(labels_cfg, context)
+            output = seg.copy()
+            for label_id in label_ids:
+                mask = (seg == label_id).astype(np.uint8)
+                if not mask.any():
+                    continue
+                labeled, num_features = ndimage.label(mask)
+                if num_features <= 1:
+                    continue
+                sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
+                keep = set(int(i) for i in np.argsort(sizes)[::-1][:keep_top_n])
+                for component in range(1, num_features + 1):
+                    if (component - 1) not in keep:
+                        output[labeled == component] = 0
+            context.intermediate_results['final_prediction'] = output
+            return context
+
         logger.debug(f"Selecting largest {keep_top_n} components")
         
         labeled, num_features = ndimage.label(seg)
@@ -282,23 +352,63 @@ class IntensityMaskStep(PipelineStep):
 class RemoveSmallObjectsStep(PipelineStep):
     """
     Remove small objects from segmentation.
-    
+
     This step removes objects smaller than a specified size threshold.
+
+    With the ``labels`` option (and/or ``min_size_mm3``) the operation is
+    applied per label value using a physical volume threshold, replicating
+    the official TotalSegmentator ``remove_small_blobs_multilabel`` used by
+    the body task (body_extremities, >= 50000 mm3); the multilabel structure
+    is preserved.
     """
-    
+
     def execute(self, context: PipelineContext) -> PipelineContext:
         """
         Execute small object removal.
-        
+
         Config options:
             min_size: Minimum object size in voxels (default: 100)
+            labels: Label names/ids to process per label (optional)
+            min_size_mm3: Minimum object volume in mm3 (optional; used with
+                the per-label path, voxel volume taken from the image spacing)
         """
         min_size = self.config.get('min_size', 100)
-        
+        labels_cfg = self.config.get('labels')
+        min_size_mm3 = self.config.get('min_size_mm3')
+
         seg = context.intermediate_results.get('final_prediction',
                                                context.intermediate_results.get('refined_prediction',
                                                context.intermediate_results['raw_prediction']))
-        
+
+        if labels_cfg or min_size_mm3 is not None:
+            if labels_cfg:
+                label_ids = _resolve_context_label_ids(labels_cfg, context)
+            else:
+                label_ids = [int(v) for v in np.unique(seg) if int(v) > 0]
+
+            spacing = context.input_image.GetSpacing()
+            voxel_volume = float(spacing[0] * spacing[1] * spacing[2])
+            min_voxels = (
+                float(min_size_mm3) / voxel_volume
+                if min_size_mm3 is not None
+                else float(min_size)
+            )
+
+            output = seg.copy()
+            for label_id in label_ids:
+                mask = (seg == label_id).astype(np.uint8)
+                if not mask.any():
+                    continue
+                labeled, num_features = ndimage.label(mask)
+                if num_features == 0:
+                    continue
+                sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
+                for component in range(1, num_features + 1):
+                    if sizes[component - 1] < min_voxels:
+                        output[labeled == component] = 0
+            context.intermediate_results['final_prediction'] = output
+            return context
+
         logger.debug(f"Removing objects smaller than {min_size} voxels")
         
         # Label connected components
@@ -447,7 +557,6 @@ class AnatomicalConstraintsStep(PipelineStep):
         # Check if we have label mapping available
         # This step assumes 'labels' in metadata or config
         labels = context.metadata.get('labels', {})
-        label_values = {name: i for i, name in labels.items()} if labels else {}
         
         processed_seg = seg.copy()
         
@@ -559,7 +668,7 @@ class DistanceRefinementStep(PipelineStep):
         
         processed_seg = seg.copy()
         
-        for ref_name, ref_mask in reference_masks.items():
+        for ref_mask in reference_masks.values():
             if np.sum(ref_mask) == 0:
                 continue
 
@@ -771,4 +880,416 @@ class PetThresholdStep(PipelineStep):
         
         context.intermediate_results['refined_prediction'] = new_seg
         
+        return context
+
+
+# --------------------------------------------------------------------------- #
+# vertebrae_pp anatomical relabeling (TotalSegmentator)
+# --------------------------------------------------------------------------- #
+
+def _multilabel_labels_touch(data: np.ndarray) -> bool:
+    """Return True when two different labels touch along any axis."""
+    for axis in range(data.ndim):
+        slicer_a = [slice(None)] * data.ndim
+        slicer_b = [slice(None)] * data.ndim
+        slicer_a[axis] = slice(1, None)
+        slicer_b[axis] = slice(None, -1)
+        a = data[tuple(slicer_a)]
+        b = data[tuple(slicer_b)]
+        if np.any((a > 0) & (b > 0) & (a != b)):
+            return True
+    return False
+
+
+def _get_ellipsoid_structuring_element(voxel_spacing, radius_mm) -> np.ndarray:
+    """Create an anisotropic 3D ellipsoid kernel in physical space."""
+    if radius_mm <= 0:
+        return np.ones((1, 1, 1), dtype=bool)
+
+    radii = [radius_mm / spacing for spacing in voxel_spacing]
+    grids = np.ogrid[
+        -radii[0]:radii[0] + 1,
+        -radii[1]:radii[1] + 1,
+        -radii[2]:radii[2] + 1,
+    ]
+    return sum(
+        (grid * grid) / (radius * radius)
+        for grid, radius in zip(grids, radii)
+    ) <= 1
+
+
+def _dilate_vertebrae_labels(data, label_map, voxel_spacing, dilation_mm) -> np.ndarray:
+    """
+    Undo the 3 mm training-label erosion after vertebrae labels are separated.
+
+    Each vertebra is dilated independently, but only into background voxels so
+    already assigned vertebra labels are not overwritten.
+    """
+    if dilation_mm <= 0:
+        return data
+
+    struct_elem = _get_ellipsoid_structuring_element(voxel_spacing, dilation_mm)
+    radius_vox = np.ceil([dilation_mm / spacing for spacing in voxel_spacing]).astype(int)
+    out = data.copy()
+    for label in sorted(label_map):
+        coords = np.where(data == label)
+        if len(coords[0]) == 0:
+            continue
+
+        bbox_min = [max(int(c.min()) - r, 0) for c, r in zip(coords, radius_vox)]
+        bbox_max = [
+            min(int(c.max()) + r + 1, data.shape[axis])
+            for axis, (c, r) in enumerate(zip(coords, radius_vox))
+        ]
+        bbox = tuple(slice(start, stop) for start, stop in zip(bbox_min, bbox_max))
+
+        label_mask = data[bbox] == label
+        dilated_mask = ndimage.binary_dilation(label_mask, structure=struct_elem)
+        out_bbox = out[bbox]
+        out_bbox[(out_bbox == 0) & dilated_mask] = label
+
+    return out
+
+
+def _superior_inferior_axis(image) -> Tuple[int, float]:
+    """
+    Locate the superior-inferior axis of a ``(z, y, x)`` numpy array.
+
+    ``sitk.GetArrayFromImage`` returns arrays in ``(z, y, x)`` order while the
+    image direction matrix maps image axes to LPS physical axes. The array axis
+    whose direction vector has the largest |z| (superior) component is the S-I
+    axis; the returned sign is positive when increasing index moves superiorly.
+
+    Returns:
+        ``(array_axis, sign)``
+    """
+    direction = image.GetDirection()
+    best_axis, best_sign, best_abs = 0, 1.0, -1.0
+    for array_axis in range(3):
+        # numpy array axis ``a`` maps to ITK axis ``2 - a``; the superior
+        # component of that ITK axis is direction[2][2 - a].
+        component = direction[6 + (2 - array_axis)]
+        if abs(component) > best_abs:
+            best_abs = abs(component)
+            best_axis = array_axis
+            best_sign = 1.0 if component >= 0 else -1.0
+    return best_axis, best_sign
+
+
+def _postprocess_vertebrae_pp(seg, label_map, voxel_spacing, si_axis, si_sign,
+                              min_size_mm3, dilation_mm) -> np.ndarray:
+    """
+    Fix neighboring vertebrae labels that leaked into the same vertebral body.
+
+    The vertebrae_pp model only segments vertebral bodies, so different
+    vertebrae labels should never touch. If they do, the combined binary mask
+    is split into connected bodies and relabeled anatomically from inferior to
+    superior - except head-only scans that contain C1 but not L5, which are
+    relabeled from superior to inferior.
+    """
+    data = seg.astype(np.uint8, copy=False)
+
+    if not _multilabel_labels_touch(data):
+        return _dilate_vertebrae_labels(data, label_map, voxel_spacing, dilation_mm)
+
+    voxel_volume = float(np.prod(voxel_spacing))
+    component_map, _ = ndimage.label(data > 0)
+    component_sizes = np.bincount(component_map.ravel())
+    keep_components = np.flatnonzero(component_sizes * voxel_volume >= min_size_mm3)
+    keep_components = keep_components[keep_components != 0]
+
+    if len(keep_components) == 0:
+        return np.zeros_like(data)
+
+    keep_lookup = np.zeros(component_sizes.shape, dtype=bool)
+    keep_lookup[keep_components] = True
+    keep_mask = keep_lookup[component_map]
+
+    cleaned_data = data.copy()
+    cleaned_data[~keep_mask] = 0
+    present_labels = sorted(
+        int(label) for label in np.unique(cleaned_data) if int(label) in label_map
+    )
+    if len(present_labels) == 0:
+        return np.zeros_like(data)
+
+    label_map_inv = {name: label_id for label_id, name in label_map.items()}
+    c1_label = label_map_inv["vertebrae_C1"]
+    l5_label = label_map_inv["vertebrae_L5"]
+    count_from_top = (l5_label not in present_labels) and (c1_label in present_labels)
+
+    centers = ndimage.center_of_mass(keep_mask, component_map, keep_components)
+    if len(keep_components) == 1:
+        centers = [centers]
+    component_centers = [
+        (component, float(center[si_axis]) * si_sign)
+        for component, center in zip(keep_components, centers)
+    ]
+
+    if count_from_top:
+        component_centers.sort(key=lambda item: item[1], reverse=True)
+        labels_to_assign = range(c1_label, max(label_map) + 1)
+    else:
+        component_centers.sort(key=lambda item: item[1])
+        labels_to_assign = range(max(present_labels), min(label_map) - 1, -1)
+
+    out = np.zeros_like(data, dtype=np.uint8)
+    for (component, _), label in zip(component_centers, labels_to_assign):
+        out[component_map == component] = label
+
+    return _dilate_vertebrae_labels(out, label_map, voxel_spacing, dilation_mm)
+
+
+class VertebraePPPostprocessStep(PipelineStep):
+    """
+    Anatomical relabeling for the ``vertebrae_pp`` task.
+
+    Ports the official TotalSegmentator ``postprocess_vertebrae_pp``. When
+    labels leak into the same vertebral body the binary mask is split into
+    connected bodies and relabeled inferior-to-superior (or superior-to-
+    inferior for head-only scans), then each vertebra is dilated by
+    ``dilation_mm`` into background.
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        """
+        Config options:
+            min_size_mm3: Minimum connected body volume to keep (default: 100)
+            dilation_mm: Final per-vertebra dilation in mm (default: 3)
+        """
+        seg = context.intermediate_results.get(
+            'refined_prediction', context.intermediate_results['raw_prediction']
+        )
+        label_map = _normalize_label_map(context.metadata.get('labels'))
+        if not label_map:
+            logger.warning("%s: no label map available, skipping.", self.name)
+            return context
+
+        spacing = context.input_image.GetSpacing()
+        # Arrays are (z, y, x); spacing is (x, y, z).
+        voxel_spacing = (float(spacing[2]), float(spacing[1]), float(spacing[0]))
+        si_axis, si_sign = _superior_inferior_axis(context.input_image)
+
+        out = _postprocess_vertebrae_pp(
+            seg,
+            label_map,
+            voxel_spacing,
+            si_axis,
+            si_sign,
+            self.config.get('min_size_mm3', 100),
+            self.config.get('dilation_mm', 3),
+        )
+        context.intermediate_results['final_prediction'] = out
+        return context
+
+
+# --------------------------------------------------------------------------- #
+# BOA (Body and Organ Analysis) postprocessing
+# --------------------------------------------------------------------------- #
+
+def _remove_small_binary_objects(mask: np.ndarray, min_size: int,
+                                 structure: np.ndarray) -> np.ndarray:
+    """Remove connected components smaller than ``min_size`` voxels."""
+    labeled, num_features = ndimage.label(mask, structure=structure)
+    if num_features == 0:
+        return mask
+    sizes = np.bincount(labeled.ravel())
+    keep = sizes >= min_size
+    keep[0] = False
+    return keep[labeled]
+
+
+def _boa_remove_small_labeled_objects(mask: np.ndarray, threshold: int) -> np.ndarray:
+    """
+    Clean every label of a ``(z, y, x)`` label map.
+
+    Ports BOA ``remove_small_labeled_objects``: fill each label slice-wise
+    (external-contour fill), then drop foreground components and enclosed holes
+    smaller than ``threshold`` voxels with 26-connectivity.
+    """
+    out = np.zeros(mask.shape, dtype=mask.dtype)
+
+    for label in np.unique(mask):
+        label = int(label)
+        if label <= 0:
+            continue
+
+        label_mask = mask == label
+        filled = np.zeros(label_mask.shape, dtype=bool)
+        for index in range(label_mask.shape[0]):
+            filled[index] = ndimage.binary_fill_holes(label_mask[index])
+
+        filled = _remove_small_binary_objects(filled, threshold, _ND_26_CONNECTIVITY)
+        holes = _remove_small_binary_objects(~filled, threshold, _ND_26_CONNECTIVITY)
+        filled = ~holes
+
+        out[filled] = label
+
+    return out
+
+
+class BoaBodyPartsPostprocessStep(PipelineStep):
+    """
+    Postprocess the BOA ``body_parts`` segmentation.
+
+    Ports BOA ``postprocess_part_segmentation``: per label, fill every axial
+    slice, then remove foreground components and holes smaller than the
+    configured threshold.
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        """
+        Config options:
+            threshold: Minimum kept component/hole size in voxels (default: 3000)
+            output_key: Key of the label map to clean (default: 'final_prediction')
+        """
+        output_key = self.config.get('output_key', 'final_prediction')
+        seg = context.intermediate_results.get(
+            output_key,
+            context.intermediate_results.get(
+                'refined_prediction', context.intermediate_results['raw_prediction']
+            ),
+        )
+        threshold = int(self.config.get('threshold', 3000))
+
+        out = _boa_remove_small_labeled_objects(seg.astype(np.uint8, copy=False), threshold)
+        context.intermediate_results['final_prediction'] = out
+        return context
+
+
+def _filter_largest_unique_segment(segmentation: np.ndarray, mask: np.ndarray) -> None:
+    """Keep the largest component of ``mask``; set the remaining ones to 255."""
+    labels, num_features = ndimage.label(mask)
+    if num_features <= 1:
+        return
+    sizes = np.bincount(labels.ravel())
+    sizes[0] = 0
+    largest = int(np.argmax(sizes))
+    segmentation[(labels != largest) & (labels != 0)] = 255
+
+
+class BoaBodyRegionsPostprocessStep(PipelineStep):
+    """
+    Postprocess the BOA ``body_regions`` segmentation.
+
+    Ports BOA ``postprocess_region_segmentation``: regions that can only have a
+    single segment (whole foreground, thoracic/mediastinum/pericardium union,
+    pericardium, abdominal cavity) keep their largest connected component; the
+    remaining components are set to 255.
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        seg = context.intermediate_results.get(
+            'refined_prediction', context.intermediate_results['raw_prediction']
+        )
+        label_map = _normalize_label_map(context.metadata.get('labels'))
+
+        seg_data = seg.astype(np.uint8, copy=True)
+        _filter_largest_unique_segment(seg_data, seg_data > 0)
+
+        name_to_id = {name: label_id for label_id, name in label_map.items()}
+        thoracic = name_to_id.get('thoracic_cavity')
+        mediastinum = name_to_id.get('mediastinum')
+        pericardium = name_to_id.get('pericardium')
+        abdominal = name_to_id.get('abdominal_cavity')
+
+        if thoracic is not None and mediastinum is not None and pericardium is not None:
+            union = (
+                (seg_data == thoracic)
+                | (seg_data == mediastinum)
+                | (seg_data == pericardium)
+            )
+            _filter_largest_unique_segment(seg_data, union)
+
+        for region in (pericardium, abdominal):
+            if region is None:
+                continue
+            _filter_largest_unique_segment(seg_data, seg_data == region)
+
+        context.intermediate_results['final_prediction'] = seg_data
+        return context
+
+
+# --------------------------------------------------------------------------- #
+# Cross-task label merging
+# --------------------------------------------------------------------------- #
+
+def _resolve_merge_groups(label_map: Dict[int, str]) -> Dict[str, List[int]]:
+    """
+    Group label ids by the coarser label name they collapse into.
+
+    Merge groups come from the central SNOMED mapping (``merge_group`` column),
+    so only labels with the same non-empty group are combined. Groups with a
+    single member are dropped: there is nothing to merge into a coarser label.
+    """
+    from ...mapping import LabelMapper
+
+    try:
+        mapper = LabelMapper.get_instance()
+    except ImportError:
+        return {}
+
+    groups: Dict[str, List[int]] = {}
+    for label_id, name in label_map.items():
+        target = mapper.get_merge_group(name)
+        if not target or target == name:
+            continue
+        groups.setdefault(target, []).append(label_id)
+
+    return {group: members for group, members in groups.items() if len(members) > 1}
+
+
+class MergeLabelsStep(PipelineStep):
+    """
+    Collapse fine-grained labels that map onto the same coarser concept.
+
+    Labels listed with the same ``merge_group`` in the central SNOMED mapping
+    are combined into that single label, e.g. the left lung lobes
+    (``lung_upper_lobe_left`` / ``lung_lower_lobe_left``) become ``Left Lung``.
+
+    Each merged group keeps the lowest member id, so the prediction, the
+    per-label split and the DICOM-SEG export stay mutually consistent. A
+    name -> merged-name map is recorded in
+    ``intermediate_results['label_merge_map']`` for the orchestrator.
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        seg = context.intermediate_results.get(
+            'final_prediction',
+            context.intermediate_results.get(
+                'refined_prediction', context.intermediate_results.get('raw_prediction')
+            ),
+        )
+        label_map = _normalize_label_map(context.metadata.get('labels'))
+        if seg is None or not label_map:
+            return context
+
+        groups = _resolve_merge_groups(label_map)
+        if not groups:
+            return context
+
+        merged_map = dict(label_map)
+        merge_map: Dict[str, str] = {}
+        remap: Dict[int, int] = {}
+        for group, members in groups.items():
+            target = min(members)
+            for label_id in members:
+                merge_map[label_map[label_id]] = group
+                if label_id == target:
+                    continue
+                remap[label_id] = target
+                merged_map.pop(label_id, None)
+            merged_map[target] = group
+
+        out = np.copy(seg)
+        for source, target in remap.items():
+            out[seg == source] = target
+
+        context.intermediate_results['final_prediction'] = out
+        context.intermediate_results['label_merge_map'] = merge_map
+        context.metadata['labels'] = merged_map
+        logger.info(
+            "%s: merged %d label group(s) into %s",
+            self.name, len(groups), sorted(groups),
+        )
         return context

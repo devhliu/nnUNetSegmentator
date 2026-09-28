@@ -61,7 +61,7 @@ if result.metrics:
 
 # Convert to numpy
 seg_array = result.get_array()
-tumor_array = result.get_label_array('tumor_core')
+tumor_mask = result.labels['tumor_burden']
 ```
 
 ## Batch Processing

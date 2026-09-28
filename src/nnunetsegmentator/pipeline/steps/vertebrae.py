@@ -6,12 +6,9 @@ This module provides a step to locate specific vertebrae using TotalSegmentator.
 
 import logging
 import tempfile
-import shutil
 import subprocess
 import os
-import nibabel as nib
-import numpy as np
-from pathlib import Path
+import importlib.util
 from ..base import PipelineStep, PipelineContext
 from ... import image as sitk
 
@@ -27,12 +24,10 @@ class VertebraeLocalizationStep(PipelineStep):
     
     def validate_config(self) -> bool:
         # Check if TotalSegmentator is installed
-        try:
-            import totalsegmentator
-            return True
-        except ImportError:
+        if importlib.util.find_spec("totalsegmentator") is None:
             logger.error("TotalSegmentator not found. Please install it with 'pip install TotalSegmentator'")
             return False
+        return True
             
     def execute(self, context: PipelineContext) -> PipelineContext:
         """

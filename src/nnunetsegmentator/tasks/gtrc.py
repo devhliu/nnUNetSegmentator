@@ -1,38 +1,23 @@
 """
 GTRC-Net Task
 
-GTRC-Net: Glioblastoma Treatment Response Classification using PET/CT.
+GTRC-Net: segmentation of total tumor burden (TTB) in metastatic prostate
+cancer imaging with PSMA PET/CT, FDG PET/CT, and LuPSMA SPECT/CT.
 
-Repository: https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained
-Description: Pre-trained models for segmentation of total tumor burden (TTB) 
-            in metastatic prostate cancer imaging with PSMA PET/CT, FDG PET/CT, 
-            and LuPSMA SPECT/CT.
-
-Model Download:
-    - Git LFS: https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained.git
-    - Models are stored in Git LFS and will be automatically downloaded when cloning
-    
 Model Storage:
     - Default path: ~/.nnunetsegmentator/models/gtrc/
-    - Model weights are extracted from Git LFS repository
-    
-Reference:
-    - Sample data available at: https://zenodo.org/records/18150034
+    - Model weights are extracted from a Git LFS repository
 """
 
 from .base import BaseTask
 from ..core.registry import TaskDefinition, ModelInfo
 from ..pipeline.base import Pipeline
 from ..pipeline.steps.preprocessing import (
-    ResampleStep,
-    ClipIntensityStep,
-    NormalizeStep,
     SUVThresholdStep,
     MultiChannelStackStep,
 )
-from ..pipeline.steps.inference import nnUNetInferenceStep, CascadeInferenceStep
+from ..pipeline.steps.inference import nnUNetInferenceStep
 from ..pipeline.steps.postprocessing import (
-    ExpandContractStep,
     LargestComponentStep,
     MorphologicalOpsStep,
 )
@@ -40,23 +25,13 @@ from ..pipeline.steps.postprocessing import (
 
 class GTRCTask(BaseTask):
     """
-    GTRC-Net: Glioblastoma Treatment Response Classification.
+    GTRC-Net: total tumor burden segmentation.
     
-    This task segments glioblastoma regions from combined PET/CT images
-    to assess treatment response.
-    
-    Repository: https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained
-    Model Download: Git LFS clone from repository
-    Model Path: ~/.nnunetsegmentator/models/gtrc/
+    This task segments total tumor burden from combined PET/CT images.
     """
     
     name = "gtrc"
-    description = "Glioblastoma treatment response segmentation using PET/CT"
-    
-    # Repository and model information
-    REPO_URL = "https://github.com/Peter-MacCallum-Cancer-Centre/GTRC-Net-Pretrained"
-    MODEL_DOWNLOAD_METHOD = "git_lfs"
-    SAMPLE_DATA_URL = "https://zenodo.org/records/18150034"
+    description = "Tumor burden segmentation using PET/CT"
     
     @classmethod
     def get_definition(cls) -> TaskDefinition:
@@ -107,16 +82,8 @@ class GTRCTask(BaseTask):
             pipeline_config={
                 'name': 'gtrc_pipeline',
                 'steps': [
-                    {
-                        'type': 'resample',
-                        'name': 'resample_petct',
-                        'params': {'spacing': (1.5, 1.5, 1.5)}
-                    },
-                    {
-                        'type': 'clip_intensity',
-                        'name': 'clip_ct',
-                        'params': {'lower': -1000, 'upper': 1000}
-                    },
+                    # Resampling to the model spacing happens inside the
+                    # inference step; CT intensity handling is nnUNetv2-internal.
                     {
                         'type': 'suv_threshold',
                         'name': 'suv_pet',
@@ -167,18 +134,9 @@ class GTRCTask(BaseTask):
     def get_default_pipeline(cls) -> Pipeline:
         """Return default processing pipeline"""
         pipeline = Pipeline(name="gtrc_default")
-        
-        # Preprocessing
-        pipeline.add_step(ResampleStep(
-            'resample',
-            {'spacing': (1.5, 1.5, 1.5)}
-        ))
-        
-        pipeline.add_step(ClipIntensityStep(
-            'clip_ct',
-            {'lower': -1000, 'upper': 1000}
-        ))
-        
+
+        # Preprocessing (resampling to the model spacing happens inside the
+        # inference step; CT intensity handling is nnUNetv2-internal)
         pipeline.add_step(SUVThresholdStep(
             'suv_pet',
             {'threshold': 2.5}

@@ -6,16 +6,232 @@ enabling efficient multi-stage segmentation (low-res -> crop -> high-res).
 """
 
 import numpy as np
+from scipy import ndimage
 from ... import image as sitk
-from typing import Dict, Any, List, Tuple, Optional, Union
+from typing import Dict, Any, List, Optional
 import logging
 from copy import deepcopy
 
-from ..base import PipelineStep, PipelineContext, Pipeline
+from ..base import PipelineStep, PipelineContext
 from .inference import nnUNetInferenceStep
 from .preprocessing import ResampleStep
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_label_dict(labels: Dict[Any, Any]) -> Dict[str, int]:
+    """Normalize a label mapping to {'name': id} (accepts {id: name} or {name: id})."""
+    name_to_id: Dict[str, int] = {}
+    for key, value in labels.items():
+        if isinstance(key, int):
+            name_to_id[str(value)] = int(key)
+        else:
+            name_to_id[str(key)] = int(value)
+    return name_to_id
+
+
+def _resolve_model_label_ids(model_name: str, label_names) -> List[int]:
+    """
+    Resolve label names to the local label ids of a registered model.
+
+    Searches all registered tasks for the model and resolves each name
+    against the model's label mapping.
+    """
+    from ...core.registry import TaskRegistry
+
+    found = TaskRegistry.find_model(model_name)
+    if found is None:
+        raise ValueError(f"Model '{model_name}' is not registered in any task")
+
+    task, model_info = found
+    if not model_info.labels:
+        raise ValueError(f"Model '{model_name}' (task '{task.name}') has no labels")
+
+    name_to_id = _normalize_label_dict(model_info.labels)
+    resolved = []
+    for name in label_names:
+        key = str(name)
+        if key not in name_to_id:
+            raise ValueError(
+                f"Label '{name}' not found in model '{model_name}' (task '{task.name}')"
+            )
+        resolved.append(name_to_id[key])
+    return resolved
+
+
+def _bbox_from_mask(mask: np.ndarray, addon_mm, spacing_xyz, full_shape) -> Optional[list]:
+    """
+    Bounding box of the mask foreground expanded by addon (mm per axis),
+    replicating totalsegmentator.cropping.get_bbox_from_mask / crop_to_mask
+    (addon mm -> voxel conversion by division through the spacing).
+
+    Arrays are (x, y, z); returns [[x0, x1], [y0, y1], [z0, z1]] or None for
+    an empty mask.
+    """
+    coords = np.where(mask)
+    if coords[0].size == 0:
+        return None
+
+    addon_vox = [
+        int(float(addon_mm[axis]) / float(spacing_xyz[axis]))
+        for axis in range(3)
+    ]
+    bbox = []
+    for axis in range(3):
+        start = int(coords[axis].min()) - addon_vox[axis]
+        end = int(coords[axis].max()) + 1 + addon_vox[axis]
+        bbox.append([max(0, start), min(full_shape[axis], end)])
+    return bbox
+
+
+def _cropped_image(image: sitk.Image, bbox) -> sitk.Image:
+    """
+    Crop an image to bbox ([[x0, x1], [y0, y1], [z0, z1]]) keeping physical
+    geometry: spacing/direction are preserved and the origin shifts by
+    direction @ (spacing * first_index), replicating
+    totalsegmentator.cropping.crop_to_bbox_nifti.
+    """
+    crop_array = image.array[bbox[0][0]:bbox[0][1],
+                             bbox[1][0]:bbox[1][1],
+                             bbox[2][0]:bbox[2][1]]
+    crop_image = sitk.GetImageFromArray(crop_array)
+    crop_image.SetSpacing(image.GetSpacing())
+    crop_image.SetDirection(image.GetDirection())
+
+    direction = np.asarray(image.GetDirection(), dtype=float).reshape(3, 3)
+    spacing = np.asarray(image.GetSpacing(), dtype=float)
+    first_index = np.asarray([bbox[axis][0] for axis in range(3)], dtype=float)
+    new_origin = np.asarray(image.GetOrigin(), dtype=float) + direction @ (spacing * first_index)
+    crop_image.SetOrigin(tuple(float(v) for v in new_origin))
+    return crop_image
+
+
+class RegionCropStep(PipelineStep):
+    """
+    Crop the image to a region derived from an upstream model
+    (TotalSegmentator crop workflow).
+
+    Replicates the official TotalSegmentator crop workflow: a coarse model is
+    inferred on the full image, a binary mask over the configured label names
+    is built, and the image is cropped to the mask bounding box expanded by
+    ``crop_addon`` (mm per axis) - replicating ``crop_to_mask``. The cropped
+    array/image become the working data for downstream inference;
+    ``RegionRestoreStep`` pastes the prediction back into the full-frame grid.
+
+    Config options:
+        crop_model_name: Registered model used to produce the crop mask.
+        crop_labels: Label names (of the crop model) forming the crop mask.
+        crop_addon: Bounding box expansion in mm per axis (default [3, 3, 3]).
+        Remaining config items (folds, use_mirroring, ...) are passed through
+        to the crop model inference; ``use_mirroring`` defaults to False
+        (the official crop model runs with tta=False).
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        crop_model_name = self.config.get('crop_model_name')
+        if not crop_model_name:
+            raise ValueError("RegionCropStep requires 'crop_model_name' in config")
+        crop_labels = self.config.get('crop_labels')
+        if not crop_labels:
+            raise ValueError("RegionCropStep requires 'crop_labels' in config")
+
+        inference_config = {
+            k: v for k, v in self.config.items()
+            if k not in {'crop_model_name', 'crop_labels', 'crop_addon'}
+        }
+        inference_config.setdefault('use_mirroring', False)
+        inference_config['model_name'] = crop_model_name
+
+        crop_step = nnUNetInferenceStep(f"region_crop_{crop_model_name}", inference_config)
+        context = crop_step.execute(context)
+        crop_prediction = context.intermediate_results['raw_prediction'].copy()
+
+        crop_label_ids = _resolve_model_label_ids(crop_model_name, crop_labels)
+        mask = np.isin(crop_prediction, crop_label_ids)
+
+        spacing = context.input_image.GetSpacing()
+        full_shape = tuple(int(v) for v in context.input_array.shape)
+        addon = self.config.get('crop_addon', [3, 3, 3])
+
+        bbox = _bbox_from_mask(mask, addon, spacing, full_shape)
+        if bbox is None:
+            logger.warning(
+                "RegionCropStep: crop mask is empty for labels %s; skipping crop",
+                list(crop_labels),
+            )
+            context.intermediate_results['region_crop'] = None
+            return context
+
+        slices = tuple(slice(bbox[axis][0], bbox[axis][1]) for axis in range(3))
+        crop_array = context.input_array[slices]
+        crop_image = _cropped_image(context.input_image, bbox)
+
+        context.intermediate_results['region_crop'] = {
+            'bbox': bbox,
+            'full_shape': full_shape,
+            'crop_prediction': crop_prediction,
+            'crop_model_name': crop_model_name,
+        }
+        context.set_array(crop_array)
+        context.set_image(crop_image)
+        logger.info(
+            "RegionCropStep: cropped to bbox %s (model: %s)", bbox, crop_model_name,
+        )
+        return context
+
+
+class RegionRestoreStep(PipelineStep):
+    """
+    Paste a region-cropped prediction back into the full-frame grid
+    (TotalSegmentator ``undo_crop`` workflow role).
+
+    Expects the ``region_crop`` bookkeeping produced by ``RegionCropStep``.
+    Without it the prediction is passed through unchanged. Optionally applies
+    the official ``remove_outside`` postprocessing: the prediction is zeroed
+    outside the (dilated) crop-model mask.
+
+    Config options:
+        remove_outside: Optional dict {'labels': [...crop model label names...],
+            'dilation_mm': float} zeroing the prediction outside the dilated
+            crop-model mask (heartchambers_highres uses 10 mm dilation).
+    """
+
+    def execute(self, context: PipelineContext) -> PipelineContext:
+        region_crop = context.intermediate_results.get('region_crop')
+        prediction = context.intermediate_results.get(
+            'refined_prediction', context.intermediate_results['raw_prediction'])
+
+        if region_crop is None:
+            context.intermediate_results['raw_prediction'] = prediction
+            return context
+
+        bbox = region_crop['bbox']
+        full_shape = region_crop['full_shape']
+
+        if tuple(prediction.shape) == tuple(full_shape):
+            full_prediction = prediction
+        else:
+            full_prediction = np.zeros(full_shape, dtype=prediction.dtype)
+            slices = tuple(slice(bbox[axis][0], bbox[axis][1]) for axis in range(3))
+            full_prediction[slices] = prediction
+
+        remove_outside = self.config.get('remove_outside')
+        if remove_outside and remove_outside.get('labels'):
+            mask = np.isin(
+                region_crop['crop_prediction'],
+                _resolve_model_label_ids(
+                    region_crop['crop_model_name'], remove_outside['labels']),
+            )
+            dilation_mm = float(remove_outside.get('dilation_mm', 0) or 0)
+            if dilation_mm > 0 and mask.any():
+                spacing = context.input_image.GetSpacing()
+                iterations = int(dilation_mm / float(np.mean(spacing)))
+                mask = ndimage.binary_dilation(mask, iterations=max(0, iterations))
+            full_prediction = full_prediction.copy()
+            full_prediction[~mask] = 0
+
+        context.intermediate_results['raw_prediction'] = full_prediction
+        return context
 
 
 class ROIProcessingStep(PipelineStep):
@@ -92,12 +308,9 @@ class ROIProcessingStep(PipelineStep):
         # This assumes the high-res models output class 1..N which map to specific final classes
         
         original_spacing = context.input_image.GetSpacing()
-        original_size = context.input_image.GetSize()
         
         # Get low-res metadata for coordinate mapping
         low_res_spacing_actual = low_res_image.GetSpacing()
-        
-        results_map = {}  # Store results per structure/label
         
         for group_name, group_config in roi_groups.items():
             high_res_model = group_config.get('model')
@@ -237,9 +450,6 @@ class ROIProcessingStep(PipelineStep):
             final_combined_seg[target_x[valid], target_y[valid], target_z[valid]] = crop_seg[
                 mask_indices[0][valid], mask_indices[1][valid], mask_indices[2][valid]
             ]
-            
-            # Store in results map if needed for multi-label handling
-            # results_map[group_name] = ...
             
         context.intermediate_results['raw_prediction'] = final_combined_seg
         

@@ -6,7 +6,7 @@ This module provides the base class for defining segmentation tasks.
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from ..core.registry import TaskDefinition, ModelInfo
+from ..core.registry import TaskDefinition
 from ..pipeline.base import Pipeline
 import logging
 

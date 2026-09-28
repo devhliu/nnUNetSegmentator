@@ -38,11 +38,13 @@ nnunetsegmentator info -t gtrc
 
 | Task | Modality | Description |
 |------|----------|-------------|
-| gtrc | PET/CT | Glioblastoma segmentation |
+| gtrc | PET/CT | Total tumor burden segmentation |
 | lion | PET | Lesion identification |
 | deep_psma | PET | PSMA lesion segmentation |
 | total | CT | 117 anatomical structures |
 | dukeseg | CT | 140 anatomical structures |
+| boa_body_parts | CT | 6 body parts |
+| boa_body_regions | CT | 11 body regions |
 
 ## Multi-Modal Input
 

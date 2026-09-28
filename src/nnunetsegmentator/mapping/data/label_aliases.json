@@ -1,0 +1,213 @@
+{
+  "_description": "Label aliases and supplementary SNOMED entries for the central label mapper. 'aliases' map any model's naming (or natural phrases) onto canonical label names from moose_snomed_mapping.csv. 'entries' define additional SNOMED codings for labels that lack CSV coverage. Names are matched case-insensitively with spaces/hyphens normalized to underscores.",
+  "aliases": {
+    "urinary_bladder": "bladder",
+    "left kidney": "kidney_left",
+    "right kidney": "kidney_right",
+    "kidneys_left": "kidney_left",
+    "kidneys_right": "kidney_right",
+    "left adrenal gland": "adrenal_gland_left",
+    "right adrenal gland": "adrenal_gland_right",
+    "thyroid_gland_left": "thyroid_left",
+    "thyroid_gland_right": "thyroid_right",
+    "spinal_cord": "spinal_chord",
+    "ivc": "inferior_vena_cava",
+    "portal_vein": "portal_splenic_vein",
+    "portal_vein_and_splenic_vein": "portal_splenic_vein",
+    "heart": "heart_myocardium",
+    "myocardium": "heart_myocardium",
+    "left atrium": "heart_atrium_left",
+    "right atrium": "heart_atrium_right",
+    "left ventricle": "heart_ventricle_left",
+    "right ventricle": "heart_ventricle_right",
+    "left_atrium": "heart_atrium_left",
+    "right_atrium": "heart_atrium_right",
+    "left_ventricle": "heart_ventricle_left",
+    "right_ventricle": "heart_ventricle_right",
+    "iliac_artery_left": "iliac_artery_left",
+    "common_iliac_artery_left": "iliac_artery_left",
+    "common_iliac_artery_right": "iliac_artery_right",
+    "common_iliac_vein_left": "iliac_vena_left",
+    "common_iliac_vein_right": "iliac_vena_right",
+    "intestine": "small_bowel",
+    "small_intestine": "small_bowel",
+    "lung_upper_lobe_left": "lung_upper_lobe_left",
+    "clavicula_left": "clavicle_left",
+    "clavicula_right": "clavicle_right",
+    "vertebral_column_S1": "sacrum",
+    "vertebrae_L1": "vertebra_L1",
+    "vertebrae_L2": "vertebra_L2",
+    "vertebrae_L3": "vertebra_L3",
+    "vertebrae_L4": "vertebra_L4",
+    "vertebrae_L5": "vertebra_L5",
+    "vertebrae_T1": "vertebra_T1",
+    "vertebrae_T2": "vertebra_T2",
+    "vertebrae_T3": "vertebra_T3",
+    "vertebrae_T4": "vertebra_T4",
+    "vertebrae_T5": "vertebra_T5",
+    "vertebrae_T6": "vertebra_T6",
+    "vertebrae_T7": "vertebra_T7",
+    "vertebrae_T8": "vertebra_T8",
+    "vertebrae_T9": "vertebra_T9",
+    "vertebrae_T10": "vertebra_T10",
+    "vertebrae_T11": "vertebra_T11",
+    "vertebrae_T12": "vertebra_T12",
+    "vertebrae_C1": "vertebra_C1",
+    "vertebrae_C2": "vertebra_C2",
+    "vertebrae_C3": "vertebra_C3",
+    "vertebrae_C4": "vertebra_C4",
+    "vertebrae_C5": "vertebra_C5",
+    "vertebrae_C6": "vertebra_C6",
+    "vertebrae_C7": "vertebra_C7",
+    "vert_L1": "vertebra_L1",
+    "vert_L2": "vertebra_L2",
+    "vert_L3": "vertebra_L3",
+    "vert_L4": "vertebra_L4",
+    "vert_L5": "vertebra_L5",
+    "vert_T1": "vertebra_T1",
+    "vert_T2": "vertebra_T2",
+    "vert_T3": "vertebra_T3",
+    "vert_T4": "vertebra_T4",
+    "vert_T5": "vertebra_T5",
+    "vert_T6": "vertebra_T6",
+    "vert_T7": "vertebra_T7",
+    "vert_T8": "vertebra_T8",
+    "vert_T9": "vertebra_T9",
+    "vert_T10": "vertebra_T10",
+    "vert_T11": "vertebra_T11",
+    "vert_T12": "vertebra_T12",
+    "vert_C1": "vertebra_C1",
+    "vert_C2": "vertebra_C2",
+    "vert_C3": "vertebra_C3",
+    "vert_C4": "vertebra_C4",
+    "vert_C5": "vertebra_C5",
+    "vert_C6": "vertebra_C6",
+    "vert_C7": "vertebra_C7",
+    "L1": "vertebra_L1",
+    "L2": "vertebra_L2",
+    "L3": "vertebra_L3",
+    "L4": "vertebra_L4",
+    "L5": "vertebra_L5",
+    "T1": "vertebra_T1",
+    "T2": "vertebra_T2",
+    "T3": "vertebra_T3",
+    "T4": "vertebra_T4",
+    "T5": "vertebra_T5",
+    "T6": "vertebra_T6",
+    "T7": "vertebra_T7",
+    "T8": "vertebra_T8",
+    "T9": "vertebra_T9",
+    "T10": "vertebra_T10",
+    "T11": "vertebra_T11",
+    "T12": "vertebra_T12",
+    "C1": "vertebra_C1",
+    "C2": "vertebra_C2",
+    "C3": "vertebra_C3",
+    "C4": "vertebra_C4",
+    "C5": "vertebra_C5",
+    "C6": "vertebra_C6",
+    "C7": "vertebra_C7",
+    "rib_1_left": "rib_left_1",
+    "rib_1_right": "rib_right_1",
+    "first_rib_left": "rib_left_1",
+    "first_rib_right": "rib_right_1"
+  },
+  "entries": {
+    "tumor": {
+      "category": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "49755003",
+        "CodeMeaning": "Morphologically Abnormal Structure"
+      },
+      "type": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "108369006",
+        "CodeMeaning": "Neoplasm"
+      }
+    },
+    "psma_avid_lesion": {
+      "category": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "49755003",
+        "CodeMeaning": "Morphologically Abnormal Structure"
+      },
+      "type": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "108369006",
+        "CodeMeaning": "Neoplasm"
+      }
+    },
+    "tumor_burden": {
+      "category": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "49755003",
+        "CodeMeaning": "Morphologically Abnormal Structure"
+      },
+      "type": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "108369006",
+        "CodeMeaning": "Neoplasm"
+      }
+    },
+    "lymph_node": {
+      "category": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "49755003",
+        "CodeMeaning": "Morphologically Abnormal Structure"
+      },
+      "type": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "59441001",
+        "CodeMeaning": "Lymph node structure"
+      }
+    },
+    "bone_lesion": {
+      "category": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "49755003",
+        "CodeMeaning": "Morphologically Abnormal Structure"
+      },
+      "type": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "55342001",
+        "CodeMeaning": "Neoplastic disease of bone"
+      }
+    },
+    "Left Lung": {
+      "category": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "91723000",
+        "CodeMeaning": "Anatomical Structure"
+      },
+      "type": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "39607008",
+        "CodeMeaning": "Lung"
+      },
+      "type_modifier": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "7771000",
+        "CodeMeaning": "Left"
+      },
+      "rgb": [242, 150, 232]
+    },
+    "Right Lung": {
+      "category": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "91723000",
+        "CodeMeaning": "Anatomical Structure"
+      },
+      "type": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "39607008",
+        "CodeMeaning": "Lung"
+      },
+      "type_modifier": {
+        "CodingSchemeDesignator": "SCT",
+        "CodeValue": "24028007",
+        "CodeMeaning": "Right"
+      },
+      "rgb": [212, 191, 32]
+    }
+  }
+}

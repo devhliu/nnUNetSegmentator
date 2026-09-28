@@ -6,10 +6,6 @@ This example demonstrates:
 1. Reading DICOM series as input
 2. Performing segmentation
 3. Exporting results as DICOM SEG (DICOM Segmentation)
-4. Exporting results as DICOM RTSTRUCT (Radiotherapy Structure Set)
-
-DICOM SEG is the modern standard for segmentation storage.
-DICOM RTSTRUCT is widely used in radiotherapy planning systems.
 
 Requirements:
 - pydicom >= 2.3.0
@@ -20,8 +16,6 @@ Usage:
     python examples/04_dicom_segmentation.py
 """
 
-import os
-import tempfile
 from pathlib import Path
 import numpy as np
 from nnunetsegmentator import image as sitk
@@ -29,8 +23,7 @@ from nnunetsegmentator import image as sitk
 try:
     import pydicom
     from pydicom.dataset import Dataset, FileDataset
-    from pydicom.sequence import Sequence
-    from pydicom.uid import generate_uid, UID
+    from pydicom.uid import generate_uid
     PYDICOM_AVAILABLE = True
 except ImportError:
     PYDICOM_AVAILABLE = False
@@ -207,11 +200,10 @@ def export_dicom_seg(
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"\nExporting DICOM SEG...")
+    print("\nExporting DICOM SEG...")
     
     # Read source DICOM series
     source_dicom_files = sorted(source_dicom_dir.glob("*.dcm"))
-    source_ds = pydicom.dcmread(source_dicom_files[0])
     
     # Read segmentation
     seg_sitk = sitk.ReadImage(str(segmentation_path))
@@ -229,9 +221,6 @@ def export_dicom_seg(
     
     segments = []
     for label_value, label_name in label_names.items():
-        # Create binary mask for this label
-        mask = (seg_array == label_value).astype(np.uint8)
-        
         # Create segment
         segment = hd.seg.Segment(
             segment_number=label_value,
@@ -273,126 +262,6 @@ def export_dicom_seg(
     print(f"DICOM SEG saved to: {output_path}")
     print(f"  - Number of segments: {len(segments)}")
     print(f"  - Segments: {', '.join(label_names.values())}")
-    
-    return output_path
-
-
-def export_dicom_rtstruct(
-    segmentation_path: Path,
-    source_dicom_dir: Path,
-    output_dir: Path,
-    label_names: dict = None
-) -> Path:
-    """
-    Export segmentation as DICOM RTSTRUCT.
-    
-    DICOM RTSTRUCT is widely used in radiotherapy planning systems.
-    It stores contours for each structure.
-    
-    Args:
-        segmentation_path: Path to segmentation NIfTI file
-        source_dicom_dir: Directory containing source DICOM series
-        output_dir: Output directory
-        label_names: Dictionary mapping label values to names
-    
-    Returns:
-        Path to DICOM RTSTRUCT file
-    """
-    if not PYDICOM_AVAILABLE:
-        print("\nWarning: pydicom not available. Skipping DICOM RTSTRUCT export.")
-        return None
-    
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"\nExporting DICOM RTSTRUCT...")
-    
-    # Read source DICOM series
-    source_dicom_files = sorted(source_dicom_dir.glob("*.dcm"))
-    source_ds = pydicom.dcmread(source_dicom_files[0])
-    
-    # Read segmentation
-    seg_sitk = sitk.ReadImage(str(segmentation_path))
-    seg_array = sitk.GetArrayFromImage(seg_sitk)
-    
-    # Default labels
-    if label_names is None:
-        label_names = {
-            1: "Spleen",
-            2: "Kidney_R",
-            3: "Kidney_L",
-            5: "Liver",
-        }
-    
-    # Create RTSTRUCT dataset
-    rtstruct = Dataset()
-    
-    # Set SOP Class and Instance UIDs
-    rtstruct.SOPClassUID = '1.2.840.10008.5.1.4.1.1.481.3'  # RT Structure Set Storage
-    rtstruct.SOPInstanceUID = generate_uid()
-    
-    # Set patient and study information (copy from source)
-    rtstruct.PatientName = source_ds.PatientName
-    rtstruct.PatientID = source_ds.PatientID
-    rtstruct.StudyInstanceUID = source_ds.StudyInstanceUID
-    rtstruct.SeriesInstanceUID = generate_uid()
-    rtstruct.SeriesNumber = "100"
-    rtstruct.Modality = "RTSTRUCT"
-    
-    # Set structure set information
-    rtstruct.StructureSetLabel = "AI_Segmentation"
-    rtstruct.StructureSetName = "AI Segmentation"
-    rtstruct.StructureSetDate = "20240101"
-    rtstruct.StructureSetTime = "120000"
-    
-    # Create ROI contours
-    roi_contour_sequence = []
-    roi_sequence = []
-    
-    for i, (label_value, label_name) in enumerate(label_names.items(), start=1):
-        # Create ROI data
-        roi = Dataset()
-        roi.ROINumber = str(i)
-        roi.ReferencedROINumber = str(i)
-        roi.ROIName = label_name
-        roi.ROIGenerationAlgorithm = "AUTOMATIC"
-        roi.ROIVolume = 0.0  # Would need to calculate
-        roi_sequence.append(roi)
-        
-        # Create contour data for each slice
-        # This is simplified - real implementation would extract contours
-        contour_sequence = []
-        for slice_idx in range(seg_array.shape[0]):
-            mask_slice = seg_array[slice_idx, :, :]
-            if np.any(mask_slice == label_value):
-                # Create contour (simplified - just bounding box)
-                # Real implementation would use marching squares
-                contour = Dataset()
-                contour.ContourGeometricType = "CLOSED_PLANAR"
-                contour.NumberOfContourPoints = "4"
-                # Simplified contour coordinates
-                contour.ContourData = [0.0, 0.0, slice_idx * 2.0,
-                                      100.0, 0.0, slice_idx * 2.0,
-                                      100.0, 100.0, slice_idx * 2.0,
-                                      0.0, 100.0, slice_idx * 2.0]
-                contour_sequence.append(contour)
-        
-        # Create ROI contour
-        roi_contour = Dataset()
-        roi_contour.ReferencedROINumber = str(i)
-        roi_contour.ContourSequence = Sequence(contour_sequence)
-        roi_contour_sequence.append(roi_contour)
-    
-    # Set sequences
-    rtstruct.ROIContourSequence = Sequence(roi_contour_sequence)
-    rtstruct.StructureSetROISequence = Sequence(roi_sequence)
-    
-    # Save RTSTRUCT
-    output_path = output_dir / "segmentation_rtstruct.dcm"
-    pydicom.dcmwrite(output_path, rtstruct)
-    
-    print(f"DICOM RTSTRUCT saved to: {output_path}")
-    print(f"  - Number of structures: {len(label_names)}")
-    print(f"  - Structures: {', '.join(label_names.values())}")
     
     return output_path
 
@@ -443,48 +312,18 @@ def main():
         output_dir=output_dir
     )
     
-    # Step 4: Export as DICOM RTSTRUCT
-    print("\n" + "=" * 70)
-    print("Step 4: Exporting DICOM RTSTRUCT")
-    print("=" * 70)
-    
-    rtstruct_path = export_dicom_rtstruct(
-        segmentation_path=segmentation_path,
-        source_dicom_dir=dicom_dir,
-        output_dir=output_dir
-    )
-    
     # Summary
     print("\n" + "=" * 70)
     print("Summary")
     print("=" * 70)
-    print(f"\nInput:")
+    print("\nInput:")
     print(f"  - DICOM series: {dicom_dir}")
-    print(f"  - Number of slices: 10")
+    print("  - Number of slices: 10")
     
-    print(f"\nOutput:")
+    print("\nOutput:")
     print(f"  - NIfTI segmentation: {segmentation_path}")
     if dicom_seg_path:
         print(f"  - DICOM SEG: {dicom_seg_path}")
-    if rtstruct_path:
-        print(f"  - DICOM RTSTRUCT: {rtstruct_path}")
-    
-    print("\n" + "=" * 70)
-    print("DICOM Format Comparison:")
-    print("=" * 70)
-    print("\nDICOM SEG:")
-    print("  - Modern standard (DICOM Supplement 172)")
-    print("  - Stores each segment separately")
-    print("  - Supports overlapping segments")
-    print("  - Rich metadata per segment")
-    print("  - Recommended for new applications")
-    
-    print("\nDICOM RTSTRUCT:")
-    print("  - Traditional radiotherapy format")
-    print("  - Stores contours (not voxels)")
-    print("  - Widely supported in treatment planning systems")
-    print("  - No overlapping structures")
-    print("  - Use for radiotherapy workflows")
     
     print("\n" + "=" * 70)
     print("Example completed successfully!")

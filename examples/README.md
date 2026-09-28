@@ -23,7 +23,7 @@ Before running the examples, ensure you have:
    pip install -e .
    ```
 
-2. **Downloaded required models** (optional - models download automatically on first use):
+2. **Downloaded required models** (inference never downloads implicitly):
    ```bash
    python scripts/download_models.py --task total
    python scripts/download_models.py --task gtrc
@@ -120,13 +120,12 @@ python examples/03_custom_pipeline.py
 
 ## 04_dicom_segmentation.py
 
-**Description**: Demonstrates DICOM input and output workflows with DICOM SEG and DICOM RTSTRUCT export.
+**Description**: Demonstrates DICOM input and output workflows with DICOM SEG export.
 
 **What it does**:
 - Creates synthetic DICOM series (CT)
 - Performs segmentation from DICOM input
 - Exports results as DICOM SEG (modern standard)
-- Exports results as DICOM RTSTRUCT (radiotherapy format)
 
 **Run**:
 ```bash
@@ -147,20 +146,11 @@ pip install pydicom>=2.3.0 highdicom dicom2nifti
 - `example_output_dicom/dicom_input/` - Synthetic DICOM series
 - `example_output_dicom/segmentation.nii.gz` - NIfTI segmentation
 - `example_output_dicom/segmentation_seg.dcm` - DICOM SEG file
-- `example_output_dicom/segmentation_rtstruct.dcm` - DICOM RTSTRUCT file
 
 **Key concepts**:
 - DICOM series input
 - DICOM SEG export (modern standard)
-- DICOM RTSTRUCT export (radiotherapy)
 - Clinical workflow integration
-
-**DICOM Format Comparison**:
-
-| Format | Use Case | Advantages |
-|--------|----------|------------|
-| **DICOM SEG** | Modern applications | Rich metadata, overlapping segments, voxel-based |
-| **DICOM RTSTRUCT** | Radiotherapy planning | Wide support, contour-based, TPS compatible |
 
 ---
 

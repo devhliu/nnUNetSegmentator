@@ -5,11 +5,30 @@ from __future__ import annotations
 import re
 import shutil
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Iterator, Optional
 
-CANONICAL_TASK_ID_PATTERN = re.compile(r"^Dataset\d+_[A-Za-z0-9_]+$")
-CANONICAL_MODEL_KEY_PATTERN = re.compile(r"^Dataset\d+_[A-Za-z0-9_]+$")
+CANONICAL_TASK_ID_PATTERN = re.compile(r"^Dataset\d+_[A-Za-z0-9_-]+$")
+CANONICAL_MODEL_KEY_PATTERN = re.compile(r"^Dataset\d+_[A-Za-z0-9_-]+$")
 _SKIP_DIR_NAMES = {".git", "__pycache__"}
+MODEL_ARCHIVE_SUFFIXES = (".zip", ".tar", ".tgz")
+
+# Sentinel URL marking weights that are not publicly distributable (e.g. the
+# DukeSeg models, which are released on request, or commercial models).
+NON_DOWNLOADABLE_URL = "manual://not-publicly-distributable"
+
+# URL fragments known to be unusable placeholders.
+_UNUSABLE_URL_FRAGMENTS = ("xxxxx", "zenodo.org/api/files/")
+
+
+def is_downloadable_url(url: str) -> bool:
+    """Return False for placeholder or manually-distributed weight URLs."""
+    if not url:
+        return False
+    if url.startswith("manual://") or url == NON_DOWNLOADABLE_URL:
+        return False
+    if url.endswith(".git"):
+        return False
+    return not any(fragment in url for fragment in _UNUSABLE_URL_FRAGMENTS)
 
 
 def is_canonical_task_id(task_id: str) -> bool:
@@ -41,6 +60,40 @@ def has_model_payload(path: Path) -> bool:
         child.is_dir() and child.name.startswith("nnUNetTrainer")
         for child in path.iterdir()
     )
+
+
+def is_model_archive(path: Path) -> bool:
+    """Return True for supported model weight archives (.zip/.tar/.tar.gz/.tgz)."""
+    name = path.name.lower()
+    return path.is_file() and (
+        name.endswith(".tar.gz") or name.endswith(MODEL_ARCHIVE_SUFFIXES)
+    )
+
+
+def iter_model_candidates(root: Path, max_depth: int = 6) -> Iterator[Path]:
+    """
+    Yield local model candidates (payload directories and weight archives) under root.
+
+    Directories for which :func:`has_model_payload` is True are yielded and not
+    descended into; archive files (.zip/.tar/.tar.gz/.tgz) are yielded as files.
+    """
+    root = Path(root).expanduser().resolve()
+    if not root.exists() or not root.is_dir():
+        return
+
+    queue: list[tuple[Path, int]] = [(root, 0)]
+    while queue:
+        current, depth = queue.pop(0)
+        if has_model_payload(current):
+            yield current
+            continue
+        if depth >= max_depth:
+            continue
+        for child in sorted(current.iterdir()):
+            if is_model_archive(child):
+                yield child
+            elif child.is_dir() and child.name not in _SKIP_DIR_NAMES:
+                queue.append((child, depth + 1))
 
 
 def _iter_dirs_limited(base_path: Path, max_depth: int) -> Iterable[Path]:

@@ -7,7 +7,7 @@ including volume, intensity, shape, and radiomics features.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple
 import numpy as np
 from .. import image as sitk
 
@@ -285,7 +285,6 @@ class RadiomicsFeatures:
     def __init__(self):
         """Initialize radiomics calculator."""
         try:
-            import radiomics
             from radiomics import featureextractor
             self.featureextractor = featureextractor
             self.available = True

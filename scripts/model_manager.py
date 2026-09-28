@@ -18,8 +18,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
-import json
+from typing import Dict, List
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -50,7 +49,7 @@ def list_available_models():
         task = TaskRegistry.get_task(task_name)
         print(f"\nTask: {task_name}")
         print(f"Description: {tasks[task_name]}")
-        print(f"Models:")
+        print("Models:")
         
         for model_name, model_info in task.models.items():
             print(f"  - {model_name}")
@@ -159,8 +158,8 @@ def download_model(task_name: str, config: Config, variant: str = None):
     logger.info(f"Command: {' '.join(cmd)}")
     
     try:
-        result = subprocess.run(cmd, check=True)
-        logger.info(f"Model downloaded successfully")
+        subprocess.run(cmd, check=True)
+        logger.info("Model downloaded successfully")
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Download failed: {e}")
@@ -235,48 +234,6 @@ def install_local_models(
         logger.info("  %s -> %s", model_name, path)
 
 
-def migrate_workspace_models(
-    config: Config,
-    workspace_results: Optional[str] = None,
-    force: bool = False,
-    dry_run: bool = False,
-) -> bool:
-    """
-    Migrate models from nnUNet workspace results into canonical model storage.
-    """
-    import subprocess
-
-    script_dir = Path(__file__).parent
-    migrate_script = script_dir / "migrate_workspace_models.py"
-
-    if not migrate_script.exists():
-        logger.error("Migration script not found: %s", migrate_script)
-        return False
-
-    cmd = [
-        sys.executable,
-        str(migrate_script),
-        "--model-root",
-        str(config.model_dir),
-    ]
-    if workspace_results:
-        cmd.extend(["--workspace-results", workspace_results])
-    if force:
-        cmd.append("--force")
-    if dry_run:
-        cmd.append("--dry-run")
-
-    logger.info("Migrating workspace models into canonical model root: %s", config.model_dir)
-    logger.info("Command: %s", " ".join(cmd))
-
-    try:
-        subprocess.run(cmd, check=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        logger.error("Workspace model migration failed: %s", e)
-        return False
-
-
 def main():
     parser = argparse.ArgumentParser(
         description='Model management for nnunetsegmentator',
@@ -297,12 +254,6 @@ Examples:
 
   # Install local model files (canonical key format)
   python model_manager.py --install-local --task total --model Dataset291_total_organs=/path/to/total_organs.zip
-
-  # Preview workspace-results migration into canonical model root
-  python model_manager.py --migrate-workspace --dry-run
-
-  # Run workspace-results migration and overwrite existing targets
-  python model_manager.py --migrate-workspace --force
 
   # Clean cache (dry run)
   python model_manager.py --clean-cache
@@ -339,11 +290,6 @@ Examples:
         action='store_true',
         help='Install task model(s) from local archive/directory paths'
     )
-    action_group.add_argument(
-        '--migrate-workspace',
-        action='store_true',
-        help='Migrate models from nnUNet workspace results into canonical model layout'
-    )
     
     # Task options
     parser.add_argument(
@@ -362,22 +308,12 @@ Examples:
         metavar='DATASETID_MODELNAME=PATH',
         help='Model mapping for --install-local (repeatable)'
     )
-    parser.add_argument(
-        '--workspace-results',
-        type=str,
-        help='Path to nnUNet workspace results directory for --migrate-workspace'
-    )
     
     # Other options
     parser.add_argument(
         '--force',
         action='store_true',
         help='Force action (overwrite existing targets or delete cache)'
-    )
-    parser.add_argument(
-        '--dry-run',
-        action='store_true',
-        help='Preview action without writing changes (supported by --migrate-workspace)'
     )
     parser.add_argument(
         '--model-dir',
@@ -411,14 +347,6 @@ Examples:
         if not args.task:
             parser.error("--task is required for --install-local")
         install_local_models(args.task, args.model or [], force=args.force)
-
-    elif args.migrate_workspace:
-        migrate_workspace_models(
-            config=config,
-            workspace_results=args.workspace_results,
-            force=args.force,
-            dry_run=args.dry_run,
-        )
 
 
 if __name__ == '__main__':

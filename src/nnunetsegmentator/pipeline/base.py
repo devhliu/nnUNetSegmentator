@@ -5,7 +5,7 @@ This module provides the base classes for building composable processing pipelin
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Callable
 from dataclasses import dataclass, field
 from .. import image as sitk
 import numpy as np

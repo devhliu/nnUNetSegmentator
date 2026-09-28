@@ -18,6 +18,8 @@ from .steps import (
     ResampleNibabelStep,
     ProjectionStep,
     nnUNetInferenceStep,
+    CropFOVStep,
+    FOVRestrictStep,
     CascadeInferenceStep,
     ExpandContractStep,
     LargestComponentStep,
@@ -32,6 +34,10 @@ from .steps import (
     DistanceRefinementStep,
     ShapeConstraintStep,
     PetThresholdStep,
+    VertebraePPPostprocessStep,
+    BoaBodyPartsPostprocessStep,
+    BoaBodyRegionsPostprocessStep,
+    MergeLabelsStep,
     VertebraeLocalizationStep,
     BodyCompositionMetricsStep,
     PreserveOriginalStep,
@@ -40,6 +46,8 @@ from .steps import (
     MultiModelConcatStep,
     TotalSegmentatorEnsembleStep,
     ROIProcessingStep,
+    RegionCropStep,
+    RegionRestoreStep,
 )
 from .steps.visualization import MIPGenerationStep
 
@@ -68,11 +76,15 @@ class PipelineBuilder:
         'preserve_original': PreserveOriginalStep,
         # Inference
         'nnunet_inference': nnUNetInferenceStep,
+        'crop_fov': CropFOVStep,
+        'fov_restrict': FOVRestrictStep,
         'cascade_inference': CascadeInferenceStep,
         'ensemble_inference': EnsembleInferenceStep,
         'multi_model_concat': MultiModelConcatStep,
         'totalsegmentator_ensemble': TotalSegmentatorEnsembleStep,
         'roi': ROIProcessingStep,
+        'region_crop': RegionCropStep,
+        'region_restore': RegionRestoreStep,
         # Postprocessing
         'expand_contract': ExpandContractStep,
         'largest_component': LargestComponentStep,
@@ -87,6 +99,10 @@ class PipelineBuilder:
         'distance_refinement': DistanceRefinementStep,
         'shape_constraint': ShapeConstraintStep,
         'pet_threshold': PetThresholdStep,
+        'vertebrae_pp': VertebraePPPostprocessStep,
+        'boa_body_parts': BoaBodyPartsPostprocessStep,
+        'boa_body_regions': BoaBodyRegionsPostprocessStep,
+        'merge_labels': MergeLabelsStep,
         # Visualization
         'mip_generation': MIPGenerationStep,
         # Quantification

@@ -7,7 +7,7 @@ enabling fast 2D-based segmentation approaches like TotalSegmentator 2D.
 
 from .. import image as sitk
 import numpy as np
-from typing import Tuple, Optional, Union, List
+from typing import Tuple, Union, List
 import logging
 
 logger = logging.getLogger(__name__)
@@ -263,7 +263,6 @@ def determine_optimal_projection_axis(
         Optimal axis for projection (0, 1, or 2)
     """
     size = image.GetSize()
-    spacing = image.GetSpacing()
     
     # Typically, we want to project along the axis with the most slices
     # to get the most information in the projection

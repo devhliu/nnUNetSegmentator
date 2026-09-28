@@ -209,3 +209,6 @@ __marimo__/
 
 # copilot
 .github
+
+# python cache
+__pycache__

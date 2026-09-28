@@ -45,7 +45,7 @@
 | Challenge | Solution |
 |-----------|----------|
 | 🔴 **Fragmented ecosystem** - Each model has different APIs, dependencies, and workflows | ✅ **Unified API** - Single consistent interface for all models |
-| 🔴 **Complex setup** - Manual model downloads, environment configuration, path management | ✅ **Automatic management** - Models auto-downloaded, environments auto-configured |
+| 🔴 **Complex setup** - Manual model downloads, environment configuration, path management | ✅ **Managed storage** - One-command model install, canonical paths, environments auto-configured |
 | 🔴 **Steep learning curve** - Need to understand each model's preprocessing, inference, postprocessing | ✅ **Pre-built pipelines** - Ready-to-use processing pipelines for each task |
 | 🔴 **Limited extensibility** - Hard to customize or combine models | ✅ **Modular design** - Composable pipeline steps, easy to extend |
 | 🔴 **No production readiness** - Research code not suitable for clinical use | ✅ **Production ready** - Comprehensive error handling, logging, testing |
@@ -63,7 +63,7 @@
 
 ### 🎯 Core Capabilities
 
-- **22+ Segmentation Models**: GTRC-Net, LION, DEEP-PSMA, TotalSegmentator, DukeSeg, MRSegmentator, and more
+- **22+ Segmentation Models**: GTRC-Net, LION, DEEP-PSMA, TotalSegmentator, DukeSeg, BOA, MRSegmentator, and more
 - **Multi-Modality Support**: CT, MR (T1, T2, Dixon), PET, PET/CT, SPECT/CT
 - **Flexible Pipelines**: Composable preprocessing, inference, and postprocessing steps
 - **Multi-Format I/O**: NIfTI, DICOM, MHA, NRRD support
@@ -103,6 +103,8 @@
 | **MRSegmentator** | MR/CT | 40 structures | 1.5mm | [DOI](https://doi.org/10.1148/ryai.240777) |
 | **DukeSeg** | CT | 140 structures | 1.5mm | [arXiv](https://arxiv.org/abs/2405.11133) |
 | **TotalSegmentator 2D** | CT | 117 structures | Multi-scale | [Zenodo](https://zenodo.org/records/16985939) |
+| **BOA Body Parts** | CT | 6 body parts (torso, head, arms, legs) | 5.0mm slice thickness | [GitHub](https://github.com/UMEssen/Body-and-Organ-Analysis) |
+| **BOA Body Regions** | CT | 11 body regions (tissues, cavities) | 5.0mm slice thickness | [GitHub](https://github.com/UMEssen/Body-and-Organ-Analysis) |
 
 ### Specialized Tasks
 
@@ -114,7 +116,7 @@
 - **Musculoskeletal**: Vertebrae, body composition
 - **Other**: Body segmentation, pleural effusion
 
-**Total: 22 segmentation tasks** across multiple anatomical regions and modalities.
+**Total: 37 registered segmentation tasks** across multiple anatomical regions and modalities.
 
 See [docs/tasks/overview.md](docs/tasks/overview.md) for complete details.
 
@@ -161,20 +163,25 @@ pip install nnunetsegmentator[all]
 
 ### Model Setup
 
-Models are automatically downloaded on first use. To pre-download:
+Models must be installed before segmentation — inference only resolves them
+from disk and never downloads implicitly.
 
 ```bash
-# List available models
-nnunetsegmentator list-models
+# Download all models of a task
+nnunetsegmentator download-models -t gtrc
 
-# Download specific model
-nnunetsegmentator download-model --task gtrc
+# Download specific models of a task
+nnunetsegmentator download-models -t moose --models clin_ct_organs
 
-# Download all models
-nnunetsegmentator download-model --task all
+# Install local weights (offline machines)
+nnunetsegmentator install-models -t total \
+  --model Dataset291_total_organs=/path/to/total_organs.zip
+
+# Auto-discover and install weights under a root directory
+nnunetsegmentator install-models --from /data/weights --dry-run
 ```
 
-For detailed installation instructions, see [docs/getting-started/installation.md](docs/getting-started/installation.md).
+For details, see [docs/guide/model-management.md](docs/guide/model-management.md).
 
 ---
 
@@ -198,9 +205,9 @@ result = orchestrator.segment(
 print(f"Segmentation shape: {result.segmentation.shape}")
 print(f"Number of labels: {len(result.labels)}")
 
-# Access individual structures
-liver_mask = result.get_label_array('liver')
-kidney_left_mask = result.get_label_array('kidney_left')
+# Access individual structures (name -> SimpleITK image)
+liver_mask = result.labels['liver']
+kidney_left_mask = result.labels['kidney_left']
 ```
 
 ### Multi-Modal Segmentation (PET/CT)
@@ -220,7 +227,7 @@ result = orchestrator.segment(
 )
 
 # Access tumor burden
-tumor_burden = result.get_label_array('tumor_burden')
+tumor_burden = result.labels['tumor_burden']
 ```
 
 ### Command-Line Interface
@@ -249,12 +256,10 @@ nnunetsegmentator info --task gtrc
 from nnunetsegmentator import SegmentationOrchestrator
 
 orchestrator = SegmentationOrchestrator(task_name='total')
-result = orchestrator.segment('ct_scan.nii.gz', 'output.nii.gz')
+result = orchestrator.segment('ct_scan.nii.gz', 'output.nii.gz', compute_metrics=True)
 
 # Get volume statistics
-for label_name, label_array in result.labels.items():
-    volume_mm3 = result.compute_volume(label_name)
-    print(f"{label_name}: {volume_mm3:.2f} mm³")
+print(f"Volume: {result.metrics['volume_mm3']:.2f} mm³")
 ```
 
 ### Example 2: Custom Pipeline
@@ -384,14 +389,11 @@ result = orchestrator.segment('image.nii.gz', 'output.nii.gz')
 # Access segmentation array
 segmentation = result.get_array()  # numpy.ndarray
 
-# Access individual labels
-for label_name, label_image in result.labels.items():
-    label_array = result.get_label_array(label_name)
+# Access individual labels (name -> SimpleITK image)
+liver_mask = result.labels['liver']
 
-# Compute metrics
-volume = result.compute_volume('liver')  # in mm³
-
-# Access metadata
+# Access metrics and metadata
+print(result.metrics)
 print(result.metadata['spacing'])
 print(result.metadata['origin'])
 ```
@@ -589,6 +591,7 @@ This framework integrates models from the following research groups. **We gratef
 | **MRSegmentator** | Häntze et al. | [DOI](https://doi.org/10.1148/ryai.240777) | Apache-2.0 |
 | **DukeSeg** | Duke University CVIT | [arXiv](https://arxiv.org/abs/2405.11133) | MIT |
 | **TotalSegmentator 2D** | RISC-MI | [Zenodo](https://zenodo.org/records/16985939) | Apache-2.0 |
+| **BOA** | University of Duisburg-Essen | [GitHub](https://github.com/UMEssen/Body-and-Organ-Analysis) | Apache-2.0 |
 
 **If you use any of these models, please cite the original publications.**
 

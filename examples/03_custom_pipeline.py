@@ -13,7 +13,6 @@ from nnunetsegmentator import image as sitk
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from nnunetsegmentator import SegmentationOrchestrator, Config
 from nnunetsegmentator.pipeline import Pipeline
 from nnunetsegmentator.pipeline.steps.preprocessing import (
     ResampleStep,

@@ -1,6 +1,5 @@
 """Tests for GPU Manager"""
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from nnunetsegmentator.core.gpu_manager import (

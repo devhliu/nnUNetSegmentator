@@ -185,7 +185,7 @@ class TestPipeline:
             input_array=np.zeros((5, 5, 5)),
             metadata={}
         )
-        result = pipeline.execute(context)
+        pipeline.execute(context)
         assert step.executed
         assert context.metadata['step_executed'] == "test_step"
 

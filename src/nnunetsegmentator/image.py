@@ -34,7 +34,6 @@ logger = logging.getLogger(__name__)
 
 sitkNearestNeighbor = 0
 sitkLinear = 1
-sitkBSpline = 3
 sitkFloat32 = np.float32
 
 
@@ -90,14 +89,6 @@ class Image:
         self._array_xyz = np.asarray(self._array_xyz)
         if self._array_xyz.ndim != 3:
             raise ValueError(f"Image must be 3D, got shape {self._array_xyz.shape}")
-
-    def clone(self) -> "Image":
-        return Image(
-            self._array_xyz.copy(),
-            tuple(self._spacing_xyz),
-            tuple(self._origin_xyz),
-            tuple(self._direction),
-        )
 
     def __getitem__(self, key: Union[int, slice, Tuple[Union[int, slice], ...]]) -> "Image":
         sliced = np.asarray(self._array_xyz[key])
@@ -257,7 +248,24 @@ class ImageSeriesReader:
 
     def GetGDCMSeriesFileNames(self, directory: str) -> List[str]:
         directory_path = Path(directory)
-        return sorted(str(p) for p in directory_path.glob("*.dcm"))
+        names = sorted(str(p) for p in directory_path.glob("*.dcm"))
+        if names:
+            return names
+        # Detect DICOM files without the .dcm extension via the DICM magic
+        # at byte offset 128 (part 10 encapulated files).
+        return sorted(
+            str(p) for p in directory_path.iterdir()
+            if p.is_file() and self._is_dicom_file(p)
+        )
+
+    @staticmethod
+    def _is_dicom_file(path: Path) -> bool:
+        try:
+            with open(path, "rb") as handle:
+                handle.seek(128)
+                return handle.read(4) == b"DICM"
+        except OSError:
+            return False
 
     def SetFileNames(self, file_names: Sequence[str]) -> None:
         self._file_names = [str(f) for f in file_names]

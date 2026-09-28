@@ -1,5 +1,4 @@
 import numpy as np
-from ... import image as sitk
 from ..base import PipelineStep, PipelineContext
 import csv
 import os
@@ -135,11 +134,10 @@ class BodyCompositionMetricsStep(PipelineStep):
                 Default assumes TotalSegmentator output structure if not provided.
             csv_output: Whether to save CSV (default: True)
         """
-        # Default mapping from TotalSegmentator (v2) tissue_types to Codebase A logic
-        # TotalSeg Task 485: 1=SFAT, 2=VFAT, 3=Muscle, 4=IMAT
-        # Codebase A Logic: 1=Muscle, 2=SFAT, 3=VFAT, 4=IMAT
-        # We need to map Input Label -> Logic Label
-        # So: 1->2, 2->3, 3->1, 4->4
+        # Default mapping from TotalSegmentator (v2) tissue_types labels to the
+        # canonical metric order. TotalSeg Task 485 uses 1=SFAT, 2=VFAT,
+        # 3=Muscle, 4=IMAT; the metric order is 1=Muscle, 2=SFAT, 3=VFAT,
+        # 4=IMAT, so input label -> metric label is 1->2, 2->3, 3->1, 4->4.
         default_mapping = {
             1: 2, # SFAT -> SFAT
             2: 3, # VFAT -> VFAT
@@ -160,11 +158,9 @@ class BodyCompositionMetricsStep(PipelineStep):
             logger.warning("No segmentation found for metrics.")
             return context
             
-        # Get original image for density (HU)
-        # Use 'original_input_array' if preserved, else current 'input_array' (might be normalized!)
-        # Codebase A uses original Hounsfield Units.
-        # If 'input_array' is normalized, we can't use it for HU density.
-        # We should check if 'original_input_array' exists.
+        # Get original image for density (HU). Prefer 'original_input_array'
+        # (preserved before normalization); 'input_array' may be normalized
+        # and is only a fallback.
         img_arr = context.metadata.get('original_input_array')
         if img_arr is None:
             # Fallback, but warn if density is needed
@@ -193,7 +189,7 @@ class BodyCompositionMetricsStep(PipelineStep):
             # l3_mask is (X, Y, Z)
             z_indices = np.where(np.sum(l3_mask, axis=(0, 1)) > 0)[0]
             if len(z_indices) > 0:
-                # Codebase A uses argmax of sum, which is similar (slice with most L3)
+                # The center slice is the one with the largest L3 cross-section.
                 l3_slice_idx = int(np.argmax(np.sum(l3_mask, axis=(0, 1))))
                 
                 logger.info(f"Calculating 2D metrics at L3 (slice {l3_slice_idx})")
@@ -238,9 +234,7 @@ class BodyCompositionMetricsStep(PipelineStep):
             z_l4 = np.where(np.sum(l4_mask, axis=(0, 1)) > 0)[0]
             
             if len(z_t12) > 0 and len(z_l4) > 0:
-                # Codebase A range: min(t12, l4) to max(t12, l4) centers?
-                # Codebase A: slice_range = range(min(t12_slice, l4_slice), max(t12_slice, l4_slice) + 1)
-                # It uses the center slice of each vertebra as bounds.
+                # The range spans the center slices of T12 and L4, inclusive.
                 t12_slice = int(np.argmax(np.sum(t12_mask, axis=(0, 1))))
                 l4_slice = int(np.argmax(np.sum(l4_mask, axis=(0, 1))))
                 

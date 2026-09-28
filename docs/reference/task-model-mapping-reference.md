@@ -22,6 +22,8 @@ Canonical schema:
 
 | Task | Model name | Task ID (canonical) | Modality | Comments |
 |---|---|---|---|---|
+| `boa_body_parts` | `boa_body_parts` | `Dataset543_BCA_body_parts` | `CT` | Canonical task_id; weights from the BOA release. |
+| `boa_body_regions` | `boa_body_regions` | `Dataset542_BCA_inference` | `CT` | Canonical task_id; weights from the BOA release. |
 | `body` | `body` | `Dataset299_body` | `CT` | Canonical task_id. |
 | `body` | `body_fast` | `Dataset300_body_fast` | `CT` | Canonical task_id. |
 | `body_composition` | `body_composition` | `Dataset1005_body_composition` | `CT` | Canonical task_id. |

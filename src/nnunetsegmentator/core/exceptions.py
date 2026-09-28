@@ -51,7 +51,11 @@ class TaskNotFoundError(nnunetsegmentatorError):
 
 class ModelNotFoundError(nnunetsegmentatorError):
     """
-    Raised when a model cannot be found or downloaded.
+    Raised when a model is not installed at its expected location.
+
+    Model resolution never downloads implicitly; install the model explicitly
+    with the `download-models` / `install-models` CLI commands or
+    `TaskRegistry.download_model()`.
     """
 
     def __init__(self, model_name: str, task_name: Optional[str] = None):
@@ -60,6 +64,11 @@ class ModelNotFoundError(nnunetsegmentatorError):
         message = f"Model '{model_name}' not found"
         if task_name:
             message += f" in task '{task_name}'"
+        message += (
+            ". Install it explicitly with "
+            f"'nnunetsegmentator download-models -t {task_name or '<task>'} "
+            f"--models {model_name}' or 'install-models' for local files."
+        )
         super().__init__(message)
 
 

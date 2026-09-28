@@ -1,227 +1,107 @@
 """
-TotalSegmentator Task - Comprehensive Whole-Body Segmentation
+TotalSegmentator Tasks - Unified Definitions
 
-This module implements the TotalSegmentator task with 104+ anatomical structures
-for CT and MR imaging.
+All TotalSegmentator task classes in one module, faithful to the official
+v2.5.0-weights release (map_tasks_config.py / nnunet.py / map_to_binary.py):
 
-Repository: https://github.com/wasserth/TotalSegmentator
-Description: Tool for segmentation of most major anatomical structures in any CT or MR image.
-            Trained on a wide range of different CT and MR images.
+- ``total`` / ``total_mr``: comprehensive whole-body CT/MR segmentation.
+  The full-resolution default workflow runs 5 CT part models (or 2 MR part
+  models) whose outputs are concatenated by label name; fast/fastest modes
+  run single low-resolution models. The CT task also provides the official
+  roi workflow (per-part roi inference).
+- Specialized tasks (lung_vessels, body, tissue_types, heartchambers_highres,
+  cerebral_bleed, liver_vessels, lung_nodules, vertebrae_body, liver_lesions,
+  kidney_cysts, pleural_pericard_effusion, body_mr, tissue_types_mr).
+- v2.5.0-weights tasks (vertebrae_mr, breasts, ventricle_parts,
+  liver_segments, liver_segments_mr, trunk_cavities, brain_aneurysm,
+  vertebrae_pp, abdominal_muscles, craniofacial_structures, teeth).
 
-Model Download:
-    - Models are automatically downloaded when running TotalSegmentator
-    - Default download location: ~/.totalsegmentator/nnunet/results
-    - Can also be downloaded from Zenodo
-    
-Model Storage:
-    - Default path: ~/.nnunetsegmentator/models/total/
-    - Model weights are downloaded automatically on first use
-    
-Available Models:
-    - total: 117 classes (CT)
-    - total_mr: 50 classes (MR)
-    - total_fast: 3mm resolution (CT)
-    - total_fastest: 6mm resolution (CT)
-    - Plus many specialized models (lung_vessels, body, vertebrae_mr, etc.)
-    
-License: Apache-2.0
-Citation: Wasserthal et al., Radiology: Artificial Intelligence (2023). https://doi.org/10.1148/ryai.230024
+Workflow conventions shared by the region-crop tasks:
+- A coarse "total" model runs first (official crop model selection:
+  robust_crop -> 3mm (total_fast / total_mr_fast); otherwise 6mm
+  (total_fastest) for CT and 3mm for MR; crop labels containing
+  "body_trunc" -> "body_fast"; "teeth" -> "craniofacial_structures"), the
+  image is cropped to the mask bounding box expanded by ``crop_addon`` mm,
+  the specialized model infers, and the prediction is pasted back into the
+  full-frame grid. The crop model runs with tta=False.
+- No intensity clipping or explicit resampling is performed: the inference
+  step resamples to the model spacing from the model plans, exactly like the
+  official nnUNetv2-based predictor.
+- Official per-task postprocessing is replicated (body and vertebrae_pp).
+
+All organ label tables are managed by the :mod:`nnunetsegmentator.labels`
+sub-module (including the model-label -> SNOMED-standard naming mapping);
+this module only wires them into task/model definitions.
+
+Weight URLs come from :mod:`._sources` (official TotalSegmentator GitHub
+release folders); the commercial models without public weights use the
+``NON_DOWNLOADABLE_URL`` sentinel.
 """
 
-from typing import Dict, List, Optional
-from ..core.registry import TaskDefinition, ModelInfo
-from ..pipeline.base import Pipeline
-from ..pipeline.steps.preprocessing import ResampleStep, ClipIntensityStep, NormalizeStep
-from ..pipeline.steps.inference import (
-    nnUNetInferenceStep,
-    EnsembleInferenceStep,
-    MultiModelConcatStep,
-)
-from ..pipeline.steps.postprocessing import LargestComponentStep, FillHolesStep
-from ..pipeline.steps.roi import ROIProcessingStep
-from .base import BaseTask
 import logging
+
+from ..core.registry import TaskDefinition, ModelInfo
+from ..labels import (
+    ABDOMINAL_MUSCLES_LABELS,
+    BODY_LABELS,
+    BRAIN_ANEURYSM_LABELS,
+    BREASTS_LABELS,
+    CEREBRAL_BLEED_LABELS,
+    CRANIOFACIAL_STRUCTURES_LABELS,
+    HEART_CHAMBERS_LABELS,
+    KIDNEY_CYSTS_LABELS,
+    LIVER_LESIONS_LABELS,
+    LIVER_SEGMENTS_LABELS,
+    LIVER_VESSELS_LABELS,
+    LUNG_LOBES,
+    LUNG_NODULES_LABELS,
+    LUNG_VESSELS_LABELS,
+    MR_LABELS,
+    MR_MUSCLES_LABELS,
+    MR_ORGANS_LABELS,
+    PART_CARDIAC_LABELS,
+    PART_MUSCLES_LABELS,
+    PART_ORGANS_LABELS,
+    PART_RIBS_LABELS,
+    PART_VERTEBRAE_LABELS,
+    PLEURAL_PERICARD_EFFUSION_LABELS,
+    TEETH_LABELS,
+    TISSUE_TYPES_LABELS_3,
+    TISSUE_TYPES_LABELS_4,
+    TISSUE_TYPES_MR_LABELS,
+    TOTAL_LABELS,
+    TRUNK_CAVITIES_LABELS,
+    VERTEBRAE_BODY_LABELS,
+    VERTEBRAE_MR_LABELS,
+    VERTEBRAE_PP_LABELS,
+    VENTRICLE_PARTS_LABELS,
+)
+from ..pipeline.base import Pipeline
+from ._helpers import SingleModelTask, build_pipeline, crop_pre, restore_post
+from ._sources import (
+    BODY_EXTREMITIES_MIN_SIZE_MM3,
+    NON_DOWNLOADABLE_URL,
+    totalseg_url,
+)
+from .base import BaseTask
 
 logger = logging.getLogger(__name__)
 
 
-# Label mappings for TotalSegmentator (117 classes)
-TOTAL_LABELS = {
-    1: "spleen",
-    2: "kidney_right",
-    3: "kidney_left",
-    4: "gallbladder",
-    5: "liver",
-    6: "stomach",
-    7: "pancreas",
-    8: "adrenal_gland_right",
-    9: "adrenal_gland_left",
-    10: "lung_upper_lobe_left",
-    11: "lung_lower_lobe_left",
-    12: "lung_upper_lobe_right",
-    13: "lung_middle_lobe_right",
-    14: "lung_lower_lobe_right",
-    15: "esophagus",
-    16: "trachea",
-    17: "thyroid_gland",
-    18: "small_bowel",
-    19: "duodenum",
-    20: "colon",
-    21: "urinary_bladder",
-    22: "prostate",
-    23: "kidney_cyst_left",
-    24: "kidney_cyst_right",
-    25: "sacrum",
-    26: "vertebrae_S1",
-    27: "vertebrae_L5",
-    28: "vertebrae_L4",
-    29: "vertebrae_L3",
-    30: "vertebrae_L2",
-    31: "vertebrae_L1",
-    32: "vertebrae_T12",
-    33: "vertebrae_T11",
-    34: "vertebrae_T10",
-    35: "vertebrae_T9",
-    36: "vertebrae_T8",
-    37: "vertebrae_T7",
-    38: "vertebrae_T6",
-    39: "vertebrae_T5",
-    40: "vertebrae_T4",
-    41: "vertebrae_T3",
-    42: "vertebrae_T2",
-    43: "vertebrae_T1",
-    44: "vertebrae_C7",
-    45: "vertebrae_C6",
-    46: "vertebrae_C5",
-    47: "vertebrae_C4",
-    48: "vertebrae_C3",
-    49: "vertebrae_C2",
-    50: "vertebrae_C1",
-    51: "heart",
-    52: "aorta",
-    53: "pulmonary_vein",
-    54: "brachiocephalic_trunk",
-    55: "subclavian_artery_right",
-    56: "subclavian_artery_left",
-    57: "common_carotid_artery_right",
-    58: "common_carotid_artery_left",
-    59: "brachiocephalic_vein_left",
-    60: "brachiocephalic_vein_right",
-    61: "atrial_appendage_left",
-    62: "superior_vena_cava",
-    63: "inferior_vena_cava",
-    64: "portal_vein_and_splenic_vein",
-    65: "iliac_artery_left",
-    66: "iliac_artery_right",
-    67: "iliac_vena_left",
-    68: "iliac_vena_right",
-    69: "humerus_left",
-    70: "humerus_right",
-    71: "scapula_left",
-    72: "scapula_right",
-    73: "clavicula_left",
-    74: "clavicula_right",
-    75: "femur_left",
-    76: "femur_right",
-    77: "hip_left",
-    78: "hip_right",
-    79: "spinal_cord",
-    80: "gluteus_maximus_left",
-    81: "gluteus_maximus_right",
-    82: "gluteus_medius_left",
-    83: "gluteus_medius_right",
-    84: "gluteus_minimus_left",
-    85: "gluteus_minimus_right",
-    86: "autochthon_left",
-    87: "autochthon_right",
-    88: "iliopsoas_left",
-    89: "iliopsoas_right",
-    90: "brain",
-    91: "skull",
-    92: "rib_left_1",
-    93: "rib_left_2",
-    94: "rib_left_3",
-    95: "rib_left_4",
-    96: "rib_left_5",
-    97: "rib_left_6",
-    98: "rib_left_7",
-    99: "rib_left_8",
-    100: "rib_left_9",
-    101: "rib_left_10",
-    102: "rib_left_11",
-    103: "rib_left_12",
-    104: "rib_right_1",
-    105: "rib_right_2",
-    106: "rib_right_3",
-    107: "rib_right_4",
-    108: "rib_right_5",
-    109: "rib_right_6",
-    110: "rib_right_7",
-    111: "rib_right_8",
-    112: "rib_right_9",
-    113: "rib_right_10",
-    114: "rib_right_11",
-    115: "rib_right_12",
-    116: "sternum",
-    117: "costal_cartilages"
-}
-
-# 5-part model decomposition for efficient inference
-PART_ORGANS_LABELS = {
-    1: "spleen", 2: "kidney_right", 3: "kidney_left", 4: "gallbladder",
-    5: "liver", 6: "stomach", 7: "pancreas", 8: "adrenal_gland_right",
-    9: "adrenal_gland_left", 10: "lung_upper_lobe_left", 11: "lung_lower_lobe_left",
-    12: "lung_upper_lobe_right", 13: "lung_middle_lobe_right", 14: "lung_lower_lobe_right",
-    15: "esophagus", 16: "trachea", 17: "thyroid_gland", 18: "small_bowel",
-    19: "duodenum", 20: "colon", 21: "urinary_bladder", 22: "prostate",
-    23: "kidney_cyst_left", 24: "kidney_cyst_right"
-}
-
-PART_VERTEBRAE_LABELS = {
-    1: "sacrum", 2: "vertebrae_S1", 3: "vertebrae_L5", 4: "vertebrae_L4",
-    5: "vertebrae_L3", 6: "vertebrae_L2", 7: "vertebrae_L1", 8: "vertebrae_T12",
-    9: "vertebrae_T11", 10: "vertebrae_T10", 11: "vertebrae_T9", 12: "vertebrae_T8",
-    13: "vertebrae_T7", 14: "vertebrae_T6", 15: "vertebrae_T5", 16: "vertebrae_T4",
-    17: "vertebrae_T3", 18: "vertebrae_T2", 19: "vertebrae_T1", 20: "vertebrae_C7",
-    21: "vertebrae_C6", 22: "vertebrae_C5", 23: "vertebrae_C4", 24: "vertebrae_C3",
-    25: "vertebrae_C2", 26: "vertebrae_C1"
-}
-
-PART_CARDIAC_LABELS = {
-    1: "heart", 2: "aorta", 3: "pulmonary_vein", 4: "brachiocephalic_trunk",
-    5: "subclavian_artery_right", 6: "subclavian_artery_left",
-    7: "common_carotid_artery_right", 8: "common_carotid_artery_left",
-    9: "brachiocephalic_vein_left", 10: "brachiocephalic_vein_right",
-    11: "atrial_appendage_left", 12: "superior_vena_cava", 13: "inferior_vena_cava",
-    14: "portal_vein_and_splenic_vein", 15: "iliac_artery_left",
-    16: "iliac_artery_right", 17: "iliac_vena_left", 18: "iliac_vena_right"
-}
-
-PART_MUSCLES_LABELS = {
-    1: "humerus_left", 2: "humerus_right", 3: "scapula_left", 4: "scapula_right",
-    5: "clavicula_left", 6: "clavicula_right", 7: "femur_left", 8: "femur_right",
-    9: "hip_left", 10: "hip_right", 11: "spinal_cord", 12: "gluteus_maximus_left",
-    13: "gluteus_maximus_right", 14: "gluteus_medius_left", 15: "gluteus_medius_right",
-    16: "gluteus_minimus_left", 17: "gluteus_minimus_right", 18: "autochthon_left",
-    19: "autochthon_right", 20: "iliopsoas_left", 21: "iliopsoas_right",
-    22: "brain", 23: "skull"
-}
-
-PART_RIBS_LABELS = {
-    1: "rib_left_1", 2: "rib_left_2", 3: "rib_left_3", 4: "rib_left_4",
-    5: "rib_left_5", 6: "rib_left_6", 7: "rib_left_7", 8: "rib_left_8",
-    9: "rib_left_9", 10: "rib_left_10", 11: "rib_left_11", 12: "rib_left_12",
-    13: "rib_right_1", 14: "rib_right_2", 15: "rib_right_3", 16: "rib_right_4",
-    17: "rib_right_5", 18: "rib_right_6", 19: "rib_right_7", 20: "rib_right_8",
-    21: "rib_right_9", 22: "rib_right_10", 23: "rib_right_11", 24: "rib_right_12",
-    25: "sternum", 26: "costal_cartilages"
-}
+# Official body task postprocessing (nnunet.py): keep the largest body_trunc
+# component and remove body_extremities blobs below 50,000 mm3.
+BODY_POSTPROCESSING = [
+    {"type": "largest_component", "name": "largest_component",
+     "params": {"labels": ["body_trunc"], "keep_top_n": 1}},
+    {"type": "remove_small_objects", "name": "remove_small_objects",
+     "params": {"labels": ["body_extremities"], "min_size_mm3": BODY_EXTREMITIES_MIN_SIZE_MM3}},
+]
 
 
 class TotalSegmentatorTask(BaseTask):
     """
     TotalSegmentator task for comprehensive whole-body CT segmentation.
-    
+
     Segments 117 anatomical structures including:
     - Organs (liver, spleen, kidneys, pancreas, etc.)
     - Vertebrae (C1-L5, S1, sacrum)
@@ -229,90 +109,81 @@ class TotalSegmentatorTask(BaseTask):
     - Cardiac structures (heart, vessels)
     - Muscles and bones
     - Brain and skull
-    
-    Repository: https://github.com/wasserth/TotalSegmentator
-    Model Download: Automatic download on first use
-    Model Path: ~/.nnunetsegmentator/models/total/
+
+    Model Storage: ~/.nnunetsegmentator/models/total/
     """
-    
+
     name = "total"
     description = "Comprehensive whole-body CT segmentation with 117 anatomical structures"
-    
-    # Repository and model information
-    REPO_URL = "https://github.com/wasserth/TotalSegmentator"
-    MODEL_DOWNLOAD_METHOD = "automatic"
-    LICENSE = "Apache-2.0"
-    DOI = "10.1148/ryai.230024"
-    
+
     @classmethod
     def get_definition(cls) -> TaskDefinition:
         """Return task definition for registry."""
-        
-        # Model URLs (these would be actual URLs in production)
-        base_url = "https://zenodo.org/api/files/"
-        
+
         models = {
-            # 5-part model strategy for full resolution
+            # 5-part model strategy for full resolution.
+            # task_ids follow the official TotalSegmentator v2.0.0-weights
+            # folder names (TASK_ID_WEIGHTS_CONFIGS in map_tasks_config.py).
             "total_organs": ModelInfo(
                 name="total_organs",
-                task_id="Dataset291_total_organs",
-                url=f"{base_url}/total_organs.zip",
+                task_id="Dataset291_TotalSegmentator_part1_organs_1559subj",
+                url=totalseg_url("Dataset291_TotalSegmentator_part1_organs_1559subj", "v2.0.0-weights"),
                 checksum="",
                 labels=PART_ORGANS_LABELS,
                 modality="CT",
                 description="Organ segmentation (24 classes)",
                 default_preprocessing="ct_standard",
-                default_postprocessing="organ_postprocess"
+                default_postprocessing="default"
             ),
             "total_vertebrae": ModelInfo(
                 name="total_vertebrae",
-                task_id="Dataset292_total_vertebrae",
-                url=f"{base_url}/total_vertebrae.zip",
+                task_id="Dataset292_TotalSegmentator_part2_vertebrae_1532subj",
+                url=totalseg_url("Dataset292_TotalSegmentator_part2_vertebrae_1532subj", "v2.0.0-weights"),
                 checksum="",
                 labels=PART_VERTEBRAE_LABELS,
                 modality="CT",
                 description="Vertebrae segmentation (26 classes)",
                 default_preprocessing="ct_standard",
-                default_postprocessing="vertebrae_postprocess"
+                default_postprocessing="default"
             ),
             "total_cardiac": ModelInfo(
                 name="total_cardiac",
-                task_id="Dataset293_total_cardiac",
-                url=f"{base_url}/total_cardiac.zip",
+                task_id="Dataset293_TotalSegmentator_part3_cardiac_1559subj",
+                url=totalseg_url("Dataset293_TotalSegmentator_part3_cardiac_1559subj", "v2.0.0-weights"),
                 checksum="",
                 labels=PART_CARDIAC_LABELS,
                 modality="CT",
                 description="Cardiac and vessel segmentation (18 classes)",
                 default_preprocessing="ct_standard",
-                default_postprocessing="cardiac_postprocess"
+                default_postprocessing="default"
             ),
             "total_muscles": ModelInfo(
                 name="total_muscles",
-                task_id="Dataset294_total_muscles",
-                url=f"{base_url}/total_muscles.zip",
+                task_id="Dataset294_TotalSegmentator_part4_muscles_1559subj",
+                url=totalseg_url("Dataset294_TotalSegmentator_part4_muscles_1559subj", "v2.0.0-weights"),
                 checksum="",
                 labels=PART_MUSCLES_LABELS,
                 modality="CT",
                 description="Muscle and bone segmentation (23 classes)",
                 default_preprocessing="ct_standard",
-                default_postprocessing="muscle_postprocess"
+                default_postprocessing="default"
             ),
             "total_ribs": ModelInfo(
                 name="total_ribs",
-                task_id="Dataset295_total_ribs",
-                url=f"{base_url}/total_ribs.zip",
+                task_id="Dataset295_TotalSegmentator_part5_ribs_1559subj",
+                url=totalseg_url("Dataset295_TotalSegmentator_part5_ribs_1559subj", "v2.0.0-weights"),
                 checksum="",
                 labels=PART_RIBS_LABELS,
                 modality="CT",
                 description="Rib segmentation (26 classes)",
                 default_preprocessing="ct_standard",
-                default_postprocessing="rib_postprocess"
+                default_postprocessing="default"
             ),
             # Fast model (single model, lower resolution)
             "total_fast": ModelInfo(
                 name="total_fast",
-                task_id="Dataset297_total_fast",
-                url=f"{base_url}/total_fast.zip",
+                task_id="Dataset297_TotalSegmentator_total_3mm_1559subj",
+                url=totalseg_url("Dataset297_TotalSegmentator_total_3mm_1559subj", "v2.0.0-weights"),
                 checksum="",
                 labels=TOTAL_LABELS,
                 modality="CT",
@@ -323,8 +194,8 @@ class TotalSegmentatorTask(BaseTask):
             # Fastest model (even lower resolution)
             "total_fastest": ModelInfo(
                 name="total_fastest",
-                task_id="Dataset298_total_fastest",
-                url=f"{base_url}/total_fastest.zip",
+                task_id="Dataset298_TotalSegmentator_total_6mm_1559subj",
+                url=totalseg_url("Dataset298_TotalSegmentator_total_6mm_1559subj", "v2.0.0-weights"),
                 checksum="",
                 labels=TOTAL_LABELS,
                 modality="CT",
@@ -333,50 +204,35 @@ class TotalSegmentatorTask(BaseTask):
                 default_postprocessing="default"
             ),
         }
-        
+
         return TaskDefinition(
             name="total",
             models=models,
             pipeline_config={
+                # Faithful to the official TotalSegmentator workflow: no
+                # intensity clipping and no generic post-processing; resampling
+                # to the model spacing happens inside the inference step.
                 "default": {
-                    "preprocessing": [
-                        {"type": "resample", "spacing": [1.5, 1.5, 1.5]},
-                        {"type": "clip_intensity", "min": -1024, "max": 3071},
-                    ],
+                    "preprocessing": [],
                     "inference": {
-                        "models": ["total_organs", "total_vertebrae", "total_cardiac", 
+                        "models": ["total_organs", "total_vertebrae", "total_cardiac",
                                    "total_muscles", "total_ribs"],
                         "ensemble_mode": "concatenate",
                     },
-                    "postprocessing": [
-                        {"type": "largest_component", "labels": ["liver", "spleen"]},
-                        {"type": "fill_holes", "labels": ["liver", "kidney_right", "kidney_left"]},
-                    ]
+                    "postprocessing": [],
                 },
                 "fast": {
-                    "preprocessing": [
-                        {"type": "resample", "spacing": [3.0, 3.0, 3.0]},
-                        {"type": "clip_intensity", "min": -1024, "max": 3071},
-                    ],
-                    "inference": {
-                        "models": ["total_fast"],
-                    },
+                    "preprocessing": [],
+                    "inference": {"models": ["total_fast"]},
                     "postprocessing": []
                 },
                 "fastest": {
-                    "preprocessing": [
-                        {"type": "resample", "spacing": [6.0, 6.0, 6.0]},
-                        {"type": "clip_intensity", "min": -1024, "max": 3071},
-                    ],
-                    "inference": {
-                        "models": ["total_fastest"],
-                    },
+                    "preprocessing": [],
+                    "inference": {"models": ["total_fastest"]},
                     "postprocessing": []
                 },
                 "roi": {
-                    "preprocessing": [
-                        {"type": "clip_intensity", "min": -1024, "max": 3071},
-                    ],
+                    "preprocessing": [],
                     "inference": {
                         "type": "roi",
                         "low_res_model": "total_fast",
@@ -388,10 +244,7 @@ class TotalSegmentatorTask(BaseTask):
                             "ribs": {"model": "total_ribs", "labels": list(PART_RIBS_LABELS.keys())},
                         }
                     },
-                    "postprocessing": [
-                        {"type": "largest_component", "labels": ["liver", "spleen"]},
-                        {"type": "fill_holes", "labels": ["liver", "kidney_right", "kidney_left"]},
-                    ]
+                    "postprocessing": []
                 }
             },
             input_requirements={
@@ -406,173 +259,113 @@ class TotalSegmentatorTask(BaseTask):
                 "labels": TOTAL_LABELS,
             }
         )
-    
+
     @classmethod
     def get_default_pipeline(cls, mode: str = "default") -> Pipeline:
         """
         Return default processing pipeline.
-        
+
+        Delegates construction to PipelineBuilder so the mode-based
+        pipeline_config (pre/inference/post sections) is interpreted in one
+        place, including multi-model concat label mappings.
+
         Args:
-            mode: Pipeline mode - "default", "fast", or "fastest"
+            mode: Pipeline mode - "default", "fast", "fastest" or "roi"
         """
-        definition = cls.get_definition()
-        config = definition.pipeline_config.get(mode, definition.pipeline_config["default"])
-        
-        # Build preprocessing pipeline
-        pipeline = Pipeline()
-        
-        for step_config in config["preprocessing"]:
-            step_type = step_config["type"]
-            if step_type == "resample":
-                pipeline = pipeline | ResampleStep(
-                    name="resample",
-                    config={"spacing": step_config["spacing"]}
-                )
-            elif step_type == "clip_intensity":
-                pipeline = pipeline | ClipIntensityStep(
-                    name="clip_intensity",
-                    config={
-                        "lower": step_config.get("min"),
-                        "upper": step_config.get("max")
-                    }
-                )
-        
-        # Add inference step
-        inference_config = config["inference"]
-        
-        if inference_config.get("type") == "roi":
-            # ROI processing step
-            pipeline = pipeline | ROIProcessingStep(
-                name="total_segmentator_roi",
-                config={
-                    "low_res_model": inference_config["low_res_model"],
-                    "roi_groups": inference_config["roi_groups"],
-                    "crop_margin": [20.0, 20.0, 20.0],  # Could be configurable
-                    "low_res_spacing": [3.0, 3.0, 3.0]
-                }
-            )
-        elif len(inference_config["models"]) > 1:
-            # Multi-model ensemble
-            pipeline = pipeline | MultiModelConcatStep(
-                name="ensemble_inference",
-                config={
-                    "model_names": inference_config["models"],
-                    "label_mappings": [],
-                }
-            )
-        else:
-            # Single model
-            pipeline = pipeline | nnUNetInferenceStep(
-                name="inference",
-                config={"model_name": inference_config["models"][0]}
-            )
-        
-        # Add postprocessing steps
-        for step_config in config.get("postprocessing", []):
-            step_type = step_config["type"]
-            if step_type == "largest_component":
-                pipeline = pipeline | LargestComponentStep(
-                    name="largest_component",
-                    config={"labels": step_config.get("labels")}
-                )
-            elif step_type == "fill_holes":
-                pipeline = pipeline | FillHolesStep(
-                    name="fill_holes",
-                    config={"labels": step_config.get("labels")}
-                )
-        
-        return pipeline
+        return build_pipeline(cls.get_definition(), mode)
 
 
 class TotalSegmentatorMRTask(BaseTask):
     """
     TotalSegmentator task for MR imaging.
-    
+
     Segments 50 anatomical structures from MR images.
-    
-    Repository: https://github.com/wasserth/TotalSegmentator
-    Model Download: Automatic download on first use
-    Model Path: ~/.nnunetsegmentator/models/total_mr/
+
+    Official workflow (map_tasks_config.py, v2.5.0-weights):
+        - default: two part models 850 (organs) + 851 (muscles), concatenated
+        - fast: single 3mm model 852
+        - fastest: single 6mm model 853
+    No MR-specific pre/post-processing is performed.
+
+    Model Storage: ~/.nnunetsegmentator/models/total_mr/
     """
-    
+
     name = "total_mr"
     description = "Whole-body MR segmentation with 50 anatomical structures"
-    
-    # Repository and model information
-    REPO_URL = "https://github.com/wasserth/TotalSegmentator"
-    MODEL_DOWNLOAD_METHOD = "automatic"
-    LICENSE = "Apache-2.0"
-    DOI = "10.1148/ryai.230024"
-    
-    # MR label mapping (50 classes)
-    MR_LABELS = {
-        1: "spleen", 2: "kidney_right", 3: "kidney_left", 4: "gallbladder",
-        5: "liver", 6: "stomach", 7: "pancreas", 8: "adrenal_gland_right",
-        9: "adrenal_gland_left", 10: "lung_left", 11: "lung_right",
-        12: "esophagus", 13: "small_bowel", 14: "duodenum", 15: "colon",
-        16: "urinary_bladder", 17: "prostate", 18: "sacrum", 19: "vertebrae",
-        20: "intervertebral_discs", 21: "spinal_cord", 22: "heart", 23: "aorta",
-        24: "inferior_vena_cava", 25: "portal_vein_and_splenic_vein",
-        26: "iliac_artery_left", 27: "iliac_artery_right", 28: "iliac_vena_left",
-        29: "iliac_vena_right", 30: "humerus_left", 31: "humerus_right",
-        32: "scapula_left", 33: "scapula_right", 34: "clavicula_left",
-        35: "clavicula_right", 36: "femur_left", 37: "femur_right",
-        38: "hip_left", 39: "hip_right", 40: "gluteus_maximus_left",
-        41: "gluteus_maximus_right", 42: "gluteus_medius_left",
-        43: "gluteus_medius_right", 44: "gluteus_minimus_left",
-        45: "gluteus_minimus_right", 46: "autochthon_left", 47: "autochthon_right",
-        48: "iliopsoas_left", 49: "iliopsoas_right", 50: "brain"
-    }
-    
+
     @classmethod
     def get_definition(cls) -> TaskDefinition:
         """Return task definition for registry."""
-        
-        base_url = "https://zenodo.org/api/files/"
-        
+
         models = {
-            "total_mr_organs": ModelInfo(
-                name="total_mr_organs",
-                task_id="Dataset850_total_mr_organs",
-                url=f"{base_url}/total_mr_organs.zip",
+            "total_mr": ModelInfo(
+                name="total_mr",
+                task_id="Dataset850_TotalSegMRI_part1_organs_1088subj",
+                url=totalseg_url("Dataset850_TotalSegMRI_part1_organs_1088subj", "v2.5.0-weights"),
                 checksum="",
-                labels=cls.MR_LABELS,
+                labels=MR_ORGANS_LABELS,
                 modality="MR",
-                description="MR organ segmentation",
+                description="MR organ segmentation (29 classes)",
+                default_preprocessing="mr_standard",
+                default_postprocessing="default"
+            ),
+            "total_mr_part2": ModelInfo(
+                name="total_mr_part2",
+                task_id="Dataset851_TotalSegMRI_part2_muscles_1088subj",
+                url=totalseg_url("Dataset851_TotalSegMRI_part2_muscles_1088subj", "v2.5.0-weights"),
+                checksum="",
+                labels=MR_MUSCLES_LABELS,
+                modality="MR",
+                description="MR muscle segmentation (21 classes)",
                 default_preprocessing="mr_standard",
                 default_postprocessing="default"
             ),
             "total_mr_fast": ModelInfo(
                 name="total_mr_fast",
-                task_id="Dataset852_total_mr_fast",
-                url=f"{base_url}/total_mr_fast.zip",
+                task_id="Dataset852_TotalSegMRI_total_3mm_1088subj",
+                url=totalseg_url("Dataset852_TotalSegMRI_total_3mm_1088subj", "v2.5.0-weights"),
                 checksum="",
-                labels=cls.MR_LABELS,
+                labels=MR_LABELS,
                 modality="MR",
                 description="Fast MR segmentation (3mm)",
                 default_preprocessing="mr_fast",
                 default_postprocessing="default"
             ),
+            "total_mr_fastest": ModelInfo(
+                name="total_mr_fastest",
+                task_id="Dataset853_TotalSegMRI_total_6mm_1088subj",
+                url=totalseg_url("Dataset853_TotalSegMRI_total_6mm_1088subj", "v2.5.0-weights"),
+                checksum="",
+                labels=MR_LABELS,
+                modality="MR",
+                description="Fastest MR segmentation (6mm)",
+                default_preprocessing="mr_fastest",
+                default_postprocessing="default"
+            ),
         }
-        
+
         return TaskDefinition(
             name="total_mr",
             models=models,
             pipeline_config={
+                # Faithful to the official workflow: no preprocessing and no
+                # post-processing; resampling happens inside the inference step.
                 "default": {
-                    "preprocessing": [
-                        {"type": "resample", "spacing": [1.5, 1.5, 1.5]},
-                        {"type": "normalize", "method": "zscore"},
-                    ],
-                    "inference": {"models": ["total_mr_organs"]},
+                    "preprocessing": [],
+                    "inference": {
+                        "models": ["total_mr", "total_mr_part2"],
+                        "ensemble_mode": "concatenate",
+                    },
                     "postprocessing": []
                 },
                 "fast": {
-                    "preprocessing": [
-                        {"type": "resample", "spacing": [3.0, 3.0, 3.0]},
-                        {"type": "normalize", "method": "zscore"},
-                    ],
+                    "preprocessing": [],
                     "inference": {"models": ["total_mr_fast"]},
+                    "postprocessing": []
+                },
+                "fastest": {
+                    "preprocessing": [],
+                    "inference": {"models": ["total_mr_fastest"]},
                     "postprocessing": []
                 }
             },
@@ -584,35 +377,618 @@ class TotalSegmentatorMRTask(BaseTask):
             output_config={
                 "format": "nifti",
                 "multilabel": True,
-                "labels": cls.MR_LABELS,
+                "labels": MR_LABELS,
             }
         )
-    
+
     @classmethod
     def get_default_pipeline(cls, mode: str = "default") -> Pipeline:
-        """Return default processing pipeline."""
-        definition = cls.get_definition()
-        config = definition.pipeline_config.get(mode, definition.pipeline_config["default"])
-        
-        pipeline = Pipeline()
-        
-        for step_config in config["preprocessing"]:
-            step_type = step_config["type"]
-            if step_type == "resample":
-                pipeline = pipeline | ResampleStep(
-                    name="resample",
-                    config={"spacing": step_config["spacing"]}
-                )
-            elif step_type == "normalize":
-                pipeline = pipeline | NormalizeStep(
-                    name="normalize",
-                    config={"method": step_config["method"]}
-                )
-        
-        inference_config = config["inference"]
-        pipeline = pipeline | nnUNetInferenceStep(
-            name="inference",
-            config={"model_name": inference_config["models"][0]}
+        """
+        Return default processing pipeline.
+
+        Delegates construction to PipelineBuilder; the "default" mode
+        automatically becomes a multi_model_concat step with name-based
+        label mappings (part models -> global MR_LABELS).
+
+        Args:
+            mode: Pipeline mode - "default", "fast" or "fastest"
+        """
+        return build_pipeline(cls.get_definition(), mode)
+
+
+class LungVesselsTask(SingleModelTask):
+    """
+    Lung vessels and airways segmentation.
+
+    Official workflow: robust crop to the lung fields (3mm total model),
+    then segment airways/wall/arteries/veins within the cropped region.
+
+    Segments:
+    - Lung airways (trachea, bronchi)
+    - Airways wall
+    - Lung arteries
+    - Lung veins
+    """
+
+    name = "lung_vessels"
+    description = "Lung vessels and airways segmentation"
+
+    TASK_ID = "Dataset117_lung_airways_arteries_veins_282subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = LUNG_VESSELS_LABELS
+    MODEL_DESCRIPTION = "Lung vessels and airways"
+    CROP = ("total_fast", LUNG_LOBES)
+
+
+class BodySegmentationTask(SingleModelTask):
+    """
+    Body segmentation for radiotherapy planning.
+
+    Official workflow: plain inference followed by the official body
+    postprocessing (keep largest body_trunc; drop body_extremities blobs
+    below 50,000 mm3).
+
+    Segments:
+    - Body trunk (torso)
+    - Body extremities (arms, legs)
+    """
+
+    name = "body"
+    description = "Body segmentation for radiotherapy planning"
+
+    TASK_ID = "Dataset299_body_1559subj"
+    VERSION = "v2.0.0-weights"
+    LABELS = BODY_LABELS
+    MODEL_DESCRIPTION = "Body segmentation (1.5mm)"
+    POST = BODY_POSTPROCESSING
+    FAST = (
+        "body_fast",
+        "Dataset300_body_6mm_1559subj",
+        "v2.0.0-weights",
+        "Fast body segmentation (6mm)",
+    )
+
+
+class TissueTypesTask(BaseTask):
+    """
+    Tissue type segmentation for body composition analysis.
+
+    Segments:
+    - Subcutaneous fat
+    - Torso fat (visceral)
+    - Skeletal muscle
+    - Intermuscular fat (tissue_4_types model)
+    """
+
+    name = "tissue_types"
+    description = "Tissue type segmentation for body composition"
+
+    LABELS_3 = TISSUE_TYPES_LABELS_3
+    LABELS_4 = TISSUE_TYPES_LABELS_4
+
+    @classmethod
+    def get_definition(cls) -> TaskDefinition:
+        """Return task definition."""
+        models = {
+            "tissue_types": ModelInfo(
+                name="tissue_types",
+                task_id="Dataset481_tissue_1559subj",
+                url=NON_DOWNLOADABLE_URL,
+                checksum="",
+                labels=cls.LABELS_3,
+                modality="CT",
+                description="Tissue type segmentation (3 classes)",
+            ),
+            "tissue_4_types": ModelInfo(
+                name="tissue_4_types",
+                task_id="Dataset485_tissue_4types_1559subj",
+                url=NON_DOWNLOADABLE_URL,
+                checksum="",
+                labels=cls.LABELS_4,
+                modality="CT",
+                description="Tissue type segmentation (4 classes)",
+            )
+        }
+
+        return TaskDefinition(
+            name="tissue_types",
+            models=models,
+            pipeline_config={
+                "default": {
+                    "preprocessing": [],
+                    "inference": {"models": ["tissue_types"]},
+                    "postprocessing": []
+                },
+                "four_types": {
+                    "preprocessing": [],
+                    "inference": {"models": ["tissue_4_types"]},
+                    "postprocessing": []
+                }
+            },
+            input_requirements={
+                "modality": ["CT"],
+                "format": ["nifti", "dicom"],
+            },
+            output_config={
+                "format": "nifti",
+                "multilabel": True,
+                "labels": cls.LABELS_3,
+            }
         )
-        
-        return pipeline
+
+    @classmethod
+    def get_default_pipeline(cls, mode: str = "default") -> Pipeline:
+        """Return default pipeline."""
+        return build_pipeline(cls.get_definition(), mode)
+
+
+class HeartChambersTask(SingleModelTask):
+    """
+    High-resolution heart chamber segmentation.
+
+    Official workflow: robust crop around the heart (3mm total model,
+    5mm addon), inference, then zero the prediction outside the dilated
+    heart/aorta/inferior_vena_cava mask (remove_outside, 10mm dilation).
+
+    Segments:
+    - Myocardium
+    - Left atrium
+    - Left ventricle
+    - Right atrium
+    - Right ventricle
+    - Aorta
+    - Pulmonary artery
+    """
+
+    name = "heartchambers_highres"
+    description = "High-resolution heart chamber segmentation"
+
+    TASK_ID = "Dataset301_heart_highres_1559subj"
+    URL = NON_DOWNLOADABLE_URL
+    LABELS = HEART_CHAMBERS_LABELS
+    MODEL_DESCRIPTION = "High-resolution heart chambers"
+    CROP = ("total_fast", ["heart"], (5, 5, 5))
+    POST = [restore_post({
+        "labels": ["heart", "aorta", "inferior_vena_cava"],
+        "dilation_mm": 10,
+    })]
+
+
+class CerebralBleedTask(SingleModelTask):
+    """
+    Cerebral hemorrhage segmentation.
+
+    Official workflow: crop around the brain (6mm total model), then segment
+    intracerebral hemorrhage within the cropped region.
+    """
+
+    name = "cerebral_bleed"
+    description = "Cerebral hemorrhage segmentation"
+
+    TASK_ID = "Dataset150_icb_v0"
+    VERSION = "v2.0.0-weights"
+    LABELS = CEREBRAL_BLEED_LABELS
+    MODEL_DESCRIPTION = "Cerebral hemorrhage"
+    CROP = ("total_fastest", ["brain"])
+
+
+class LiverVesselsTask(SingleModelTask):
+    """
+    Liver vessels and tumor segmentation.
+
+    Official workflow: crop around the liver (6mm total model, 20mm addon),
+    then segment vessels and tumors within the cropped region.
+
+    Segments:
+    - Liver vessels (portal vein, hepatic veins)
+    - Liver tumors
+    """
+
+    name = "liver_vessels"
+    description = "Liver vessels and tumor segmentation"
+
+    TASK_ID = "Dataset008_HepaticVessel"
+    VERSION = "v2.4.0-weights"
+    LABELS = LIVER_VESSELS_LABELS
+    MODEL_DESCRIPTION = "Liver vessels and tumors"
+    CROP = ("total_fastest", ["liver"], (20, 20, 20))
+
+
+class LungNodulesTask(SingleModelTask):
+    """
+    Lung nodules segmentation.
+
+    Official workflow: crop to the lung fields (6mm total model, 10mm addon),
+    then segment nodules within the cropped region.
+    """
+
+    name = "lung_nodules"
+    description = "Lung nodules segmentation"
+
+    TASK_ID = "Dataset913_lung_nodules"
+    VERSION = "v2.5.0-weights"
+    LABELS = LUNG_NODULES_LABELS
+    MODEL_DESCRIPTION = "Lung nodules"
+    CROP = ("total_fastest", LUNG_LOBES, (10, 10, 10))
+
+
+class VertebraeBodyTask(SingleModelTask):
+    """
+    Vertebrae body and intervertebral disc segmentation.
+
+    Official workflow: plain inference (no crop, no postprocessing).
+    """
+
+    name = "vertebrae_body"
+    description = "Vertebrae body segmentation"
+
+    TASK_ID = "Dataset305_vertebrae_discs_1559subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = VERTEBRAE_BODY_LABELS
+
+
+class LiverLesionsTask(BaseTask):
+    """
+    Liver lesions segmentation.
+
+    Official workflow: robust crop around the liver, then segment lesions
+    within the cropped region. The CT model crops with the 3mm total model
+    (10mm addon); the MR model crops with the 3mm MR total model (default
+    addon).
+    """
+
+    name = "liver_lesions"
+    description = "Liver lesions segmentation"
+
+    LABELS = LIVER_LESIONS_LABELS
+
+    @classmethod
+    def _ct_steps(cls):
+        return [
+            crop_pre("total_fast", ["liver"], (10, 10, 10)),
+            {"type": "nnunet_inference", "name": "inference",
+             "params": {"model_name": "liver_lesions"}},
+            restore_post(),
+        ]
+
+    @classmethod
+    def _mr_steps(cls):
+        return [
+            crop_pre("total_mr_fast", ["liver"]),
+            {"type": "nnunet_inference", "name": "inference",
+             "params": {"model_name": "liver_lesions_mr"}},
+            restore_post(),
+        ]
+
+    @classmethod
+    def get_definition(cls) -> TaskDefinition:
+        """Return task definition."""
+        models = {
+            "liver_lesions": ModelInfo(
+                name="liver_lesions",
+                task_id="Dataset591_ct_liver_lesions_842subj",
+                url=totalseg_url("Dataset591_ct_liver_lesions_842subj", "v2.5.0-weights"),
+                checksum="",
+                labels=cls.LABELS,
+                modality="CT",
+                description="Liver lesions (CT)",
+            ),
+            "liver_lesions_mr": ModelInfo(
+                name="liver_lesions_mr",
+                task_id="Dataset589_ct_mri_liver_lesions_750subj",
+                url=totalseg_url("Dataset589_ct_mri_liver_lesions_750subj", "v2.5.0-weights"),
+                checksum="",
+                labels=cls.LABELS,
+                modality="MR",
+                description="Liver lesions (MR)",
+            )
+        }
+
+        return TaskDefinition(
+            name="liver_lesions",
+            models=models,
+            pipeline_config={
+                "name": "liver_lesions_pipeline",
+                "steps": cls._ct_steps(),
+                # Per-model overrides (picked up by the orchestrator for the
+                # per_model strategy); keys are model identifiers.
+                "model_steps": {
+                    "liver_lesions_mr": cls._mr_steps(),
+                },
+            },
+            input_requirements={
+                "modality": ["CT", "MR"],
+                "format": ["nifti", "dicom"],
+            },
+            output_config={
+                "format": "nifti",
+                "multilabel": True,
+                "labels": cls.LABELS,
+            }
+        )
+
+    @classmethod
+    def get_default_pipeline(cls, mode: str = "default") -> Pipeline:
+        """Return default pipeline (mode "mr" selects the MR workflow)."""
+        definition = cls.get_definition()
+        steps = definition.pipeline_config["model_steps"]["liver_lesions_mr"] \
+            if mode == "mr" else definition.pipeline_config["steps"]
+        return build_pipeline(
+            definition,
+            config={"name": "liver_lesions_pipeline", "steps": steps},
+        )
+
+
+class KidneyCystsTask(SingleModelTask):
+    """
+    Kidney cysts segmentation.
+
+    Official workflow: crop around kidneys/liver/spleen/colon (6mm total
+    model, 10mm addon), then segment cysts within the cropped region.
+    """
+
+    name = "kidney_cysts"
+    description = "Kidney cysts segmentation"
+
+    TASK_ID = "Dataset789_kidney_cyst_501subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = KIDNEY_CYSTS_LABELS
+    MODEL_DESCRIPTION = "Kidney cysts"
+    CROP = (
+        "total_fastest",
+        ["kidney_left", "kidney_right", "liver", "spleen", "colon"],
+        (10, 10, 10),
+    )
+
+
+class PleuralPericardEffusionTask(SingleModelTask):
+    """
+    Pleural and pericardial effusion segmentation.
+
+    Official workflow: crop to the lung fields (6mm total model, 50mm addon),
+    then segment effusions within the cropped region.
+    """
+
+    name = "pleural_pericard_effusion"
+    description = "Pleural and pericardial effusion segmentation"
+
+    TASK_ID = "Dataset315_thoraxCT"
+    VERSION = "v2.0.0-weights"
+    LABELS = PLEURAL_PERICARD_EFFUSION_LABELS
+    MODEL_DESCRIPTION = "Pleural and pericardial effusion"
+    CROP = ("total_fastest", LUNG_LOBES, (50, 50, 50))
+
+
+class BodyMRTask(SingleModelTask):
+    """
+    Body segmentation for MR images.
+
+    Official workflow: plain inference; the MR body task has no
+    postprocessing (unlike its CT counterpart).
+    """
+
+    name = "body_mr"
+    description = "Body segmentation for MR images"
+
+    TASK_ID = "Dataset597_mri_body_139subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = BODY_LABELS
+    MODALITY = "MR"
+    MODEL_DESCRIPTION = "Body segmentation (MR, 1.5mm)"
+    FAST = (
+        "body_mr_fast",
+        "Dataset598_mri_body_6mm_139subj",
+        "v2.5.0-weights",
+        "Fast body segmentation (MR, 6mm)",
+    )
+
+
+class TissueTypesMRTask(SingleModelTask):
+    """
+    Tissue type segmentation for MR images.
+
+    Segments subcutaneous fat, torso fat and skeletal muscle in MR images.
+    Official workflow: plain inference.
+    """
+
+    name = "tissue_types_mr"
+    description = "Tissue type segmentation for MR images"
+
+    TASK_ID = "Dataset925_MRI_tissue_subset_903subj"
+    URL = NON_DOWNLOADABLE_URL
+    LABELS = TISSUE_TYPES_MR_LABELS
+    MODALITY = "MR"
+    MODEL_DESCRIPTION = "Tissue types (MR)"
+
+
+class VertebraeMRTask(SingleModelTask):
+    """
+    MR vertebrae segmentation (sacrum, L5..C1).
+
+    Official workflow: plain inference (no crop, no postprocessing).
+    """
+
+    name = "vertebrae_mr"
+    description = "MR vertebrae segmentation (25 structures)"
+
+    TASK_ID = "Dataset756_mri_vertebrae_1076subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = VERTEBRAE_MR_LABELS
+    MODALITY = "MR"
+    MODEL_DESCRIPTION = "MR vertebrae segmentation"
+
+
+class BreastsTask(SingleModelTask):
+    """
+    Breast segmentation (CT).
+
+    Official workflow: plain inference (no crop, no postprocessing).
+    """
+
+    name = "breasts"
+    description = "Breast segmentation"
+
+    TASK_ID = "Dataset527_breasts_1559subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = BREASTS_LABELS
+
+
+class VentriclePartsTask(SingleModelTask):
+    """
+    Brain ventricle parts segmentation (CT).
+
+    Official workflow: crop tightly around the brain (6mm total model,
+    0mm addon), then segment the ventricle substructures.
+    """
+
+    name = "ventricle_parts"
+    description = "Brain ventricle parts segmentation"
+
+    TASK_ID = "Dataset552_ventricle_parts_38subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = VENTRICLE_PARTS_LABELS
+    CROP = ("total_fastest", ["brain"], (0, 0, 0))
+
+
+class LiverSegmentsTask(SingleModelTask):
+    """
+    Liver segments segmentation (Couinaud 1-8, CT).
+
+    Official workflow: crop around the liver (6mm total model, 10mm addon),
+    then segment the liver segments.
+    """
+
+    name = "liver_segments"
+    description = "Liver segments segmentation (Couinaud 1-8)"
+
+    TASK_ID = "Dataset570_ct_liver_segments"
+    VERSION = "v2.5.0-weights"
+    LABELS = LIVER_SEGMENTS_LABELS
+    MODEL_DESCRIPTION = "Liver segments segmentation (CT)"
+    CROP = ("total_fastest", ["liver"], (10, 10, 10))
+
+
+class LiverSegmentsMRTask(SingleModelTask):
+    """
+    Liver segments segmentation (Couinaud 1-8, MR).
+
+    Official workflow: crop around the liver (3mm MR total model, 10mm
+    addon), then segment the liver segments.
+    """
+
+    name = "liver_segments_mr"
+    description = "Liver segments segmentation (MR, Couinaud 1-8)"
+
+    TASK_ID = "Dataset576_mri_liver_segments_120subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = LIVER_SEGMENTS_LABELS
+    MODALITY = "MR"
+    MODEL_DESCRIPTION = "Liver segments segmentation (MR)"
+    CROP = ("total_mr_fast", ["liver"], (10, 10, 10))
+
+
+class TrunkCavitiesTask(SingleModelTask):
+    """
+    Trunk cavities segmentation (CT).
+
+    Official workflow: plain inference (no crop, no postprocessing).
+    """
+
+    name = "trunk_cavities"
+    description = "Trunk cavities segmentation"
+
+    TASK_ID = "Dataset343_mediastinum_1786subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = TRUNK_CAVITIES_LABELS
+
+
+class BrainAneurysmTask(SingleModelTask):
+    """
+    Brain aneurysm segmentation (TOF MR).
+
+    Official workflow: plain inference (no crop, no postprocessing).
+    Only works with TOF MRI images.
+    """
+
+    name = "brain_aneurysm"
+    description = "Brain aneurysm segmentation (TOF MR)"
+
+    TASK_ID = "Dataset615_MAXIMUS"
+    VERSION = "v2.5.0-weights"
+    LABELS = BRAIN_ANEURYSM_LABELS
+    MODALITY = "MR"
+    MODEL_DESCRIPTION = "Brain aneurysm segmentation (TOF MR only)"
+
+
+class VertebraePPTask(SingleModelTask):
+    """
+    Vertebrae segmentation with posterior elements (C1..L5, CT).
+
+    Official workflow: plain inference followed by the official
+    ``postprocess_vertebrae_pp`` refinement (anatomical relabeling,
+    connected-component filtering, volume thresholding and dilation).
+    """
+
+    name = "vertebrae_pp"
+    description = "Vertebrae segmentation with posterior elements (C1-L5)"
+
+    TASK_ID = "Dataset803_TotalSegmentator_vertebrae_inner_1559subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = VERTEBRAE_PP_LABELS
+    MODEL_DESCRIPTION = "Vertebrae segmentation with posterior elements"
+    POST = [{"type": "vertebrae_pp", "name": "vertebrae_pp", "params": {}}]
+
+
+class AbdominalMusclesTask(SingleModelTask):
+    """
+    Abdominal muscles segmentation (CT).
+
+    Official workflow: crop to the body trunk (6mm body model, 5mm addon),
+    then segment the muscle groups. The model only segments within T4-L4;
+    training annotations were restricted to that region.
+    """
+
+    name = "abdominal_muscles"
+    description = "Abdominal muscles segmentation"
+
+    TASK_ID = "Dataset952_abdominal_muscles_167subj"
+    VERSION = "v2.5.0-weights"
+    LABELS = ABDOMINAL_MUSCLES_LABELS
+    CROP = ("body_fast", ["body_trunc"], (5, 5, 5))
+
+
+class CraniofacialStructuresTask(SingleModelTask):
+    """
+    Craniofacial structures segmentation (CT).
+
+    Official workflow: crop around the skull (6mm total model, 20mm addon),
+    then segment the craniofacial structures. Also serves as the crop model
+    for the "teeth" task.
+    """
+
+    name = "craniofacial_structures"
+    description = "Craniofacial structures segmentation"
+
+    TASK_ID = "Dataset115_mandible"
+    VERSION = "v2.5.0-weights"
+    LABELS = CRANIOFACIAL_STRUCTURES_LABELS
+    CROP = ("total_fastest", ["skull"], (20, 20, 20))
+
+
+class TeethTask(SingleModelTask):
+    """
+    Teeth and jaw segmentation (77 structures, CT/CBCT).
+
+    Official workflow: crop around the lower/upper teeth using the
+    "craniofacial_structures" model (10mm addon; mandible excluded from the
+    crop mask to keep the FOV narrow as trained on CBCT data), then segment
+    teeth, jaws, canals and restorations.
+    """
+
+    name = "teeth"
+    description = "Teeth and jaw segmentation (77 structures)"
+
+    TASK_ID = "Dataset113_ToothFairy3"
+    VERSION = "v2.5.0-weights"
+    LABELS = TEETH_LABELS
+    CROP = ("craniofacial_structures", ["teeth_lower", "teeth_upper"], (10, 10, 10))

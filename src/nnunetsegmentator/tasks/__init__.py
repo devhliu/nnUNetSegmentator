@@ -27,19 +27,32 @@ def _import_task_modules() -> None:
         importlib.import_module(f"{package_name}.{module_name}")
 
 
+def _all_subclasses(base: Type[BaseTask]) -> List[Type[BaseTask]]:
+    """Recursively collect every subclass, including intermediate bases."""
+    found: List[Type[BaseTask]] = []
+    for subclass in base.__subclasses__():
+        found.append(subclass)
+        found.extend(_all_subclasses(subclass))
+    return found
+
+
 def discover_task_classes(refresh: bool = False) -> List[Type[BaseTask]]:
     """
     Discover all built-in task classes.
 
     Any new task module that defines a BaseTask subclass under this package
-    is picked up automatically.
+    is picked up automatically, including leaf classes of intermediate bases
+    (e.g. :class:`~.tasks._helpers.SingleModelTask`). Classes without a task
+    ``name`` are treated as abstract and skipped.
     """
     global _DISCOVERY_DONE
     if refresh or not _DISCOVERY_DONE:
         _DISCOVERED_TASK_CLASSES.clear()
         _import_task_modules()
 
-        for task_class in BaseTask.__subclasses__():
+        for task_class in _all_subclasses(BaseTask):
+            if not task_class.name:
+                continue
             if task_class.__module__.startswith(f"{__name__}."):
                 key = task_class.name or task_class.__name__
                 _DISCOVERED_TASK_CLASSES[key] = task_class
